@@ -37,8 +37,11 @@ DeckDocument → DeckFacts → ModelAssumptions → FinancialModel → { PDF, XL
    ingest        extract         assume            model          render
 ```
 
-- `ingest/` — `.pdf`/`.pptx` → ordered text blocks and tables, each tagged with its
-  page/slide number and block type. PPTX speaker notes are preserved; founders hide
+- `ingest/` — `.pdf`/`.pptx` → `DeckDocument`: a flat, ordered tuple of blocks, each
+  tagged with its page/slide number and kind. `DeckDocument.citation(page)` produces
+  the exact string that later lands in `Sourced.citation` (`"slide 7"` / `"p. 12"`),
+  and `as_prompt_text()` labels every page boundary so the model can only cite a
+  location it was actually shown. PPTX speaker notes are preserved — founders hide
   real numbers there. A PDF yielding under 200 characters is treated as a scan.
 - `extract/` — two Claude passes (company profile, financial facts), each returning
   strict JSON validated against the schema, retried once with the validation error fed
@@ -61,6 +64,10 @@ DeckDocument → DeckFacts → ModelAssumptions → FinancialModel → { PDF, XL
 | Packaging | hatchling, `src/` layout, plain `venv` + pip | `uv` is not installed here. Matches sibling TEN Capital projects. |
 | OCR | optional extra, hard-fails with install instructions | `tesseract` and `poppler` are binaries pip cannot install; the error says exactly where to get them. |
 | Fiscal calendar | Year 1 = 12 months starting the month after the deck's stated "as of" date (else the run date) | Stated explicitly on both artifacts rather than assumed silently. |
+| PDF text extraction | pypdf `extraction_mode="layout"` | The default mode concatenates a slide heading onto the following sentence (`"PROBLEM190,600 patients suffer…"`), which destroys the blank-line paragraph split. Layout mode recovered 53% more text on the real deck (146 blocks vs 33). |
+| PDF table filtering | Keep tables with ≥2 rows, ≥2 cols and ≥50% non-empty cells | pdfplumber reports ruled *layout* as a table. Measured on the real deck: genuine financial tables score ~0.82 density, layout artifacts ~0.38. The filter drops two false positives and keeps the founder's 5-year P&L. |
+| PDF block `kind` | always `body` | A PDF carries no reliable structural semantics. The PPTX reader identifies titles from real placeholders; the PDF reader declines to guess rather than assert an invented structure. |
+| PPTX shape order | sorted by (top, left) | python-pptx yields shapes in z-order, which on a busy slide bears no relation to reading order. Group shapes are flattened recursively so nothing nested is dropped. |
 | Cache | `~/.cache/pitchdeck-cfo/<sha256(deck)+prompt_version+model>.json` | Iterating on rendering costs no API calls. `--no-cache` bypasses. |
 
 ## Layout
@@ -99,7 +106,7 @@ deselected in CI with `-m "not llm and not smoke"`.
 | Phase | Deliverable | Status |
 |---|---|---|
 | 0 | Scaffold, config, CLI skeleton, CI, fixtures | **done** |
-| 1 | Ingest layer | |
+| 1 | Ingest layer | **done** |
 | 2 | Extraction schema, prompts, client, cache | |
 | 3 | Assumption engine + benchmarks | |
 | 4 | Modelling engine + accounting-integrity tests | |

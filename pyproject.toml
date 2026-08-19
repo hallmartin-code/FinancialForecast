@@ -63,7 +63,10 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 ignore = ["E501"]
 
 [tool.mypy]
-python_version = "3.11"
+# No python_version pin: it would be checked against whichever interpreter's
+# third-party stubs are installed, and numpy's current stubs use 3.12+ syntax that
+# a 3.11 pin cannot parse. mypy defaults to the running interpreter, so CI (3.11)
+# verifies the floor and local runs verify the version actually in use.
 packages = ["pitchdeck_cfo"]
 mypy_path = "src"
 strict = true
