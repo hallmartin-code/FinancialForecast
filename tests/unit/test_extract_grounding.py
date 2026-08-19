@@ -156,3 +156,133 @@ class TestWalksTheWholeTree:
             "next_milestone.description",
             "trial_or_validation_data[0]",
         }
+
+
+class TestMultiPartQuotes:
+    """A quote of a visual grouping is not one contiguous run of the page text.
+
+    A competitor matrix or a use-of-funds column reads as a block but extracts as
+    several non-adjacent pieces. Each piece must still be found on the cited page.
+    """
+
+    def _matrix_deck(self) -> DeckDocument:
+        return DeckDocument(
+            path=Path("d.pdf"),
+            kind="pdf",
+            page_count=1,
+            blocks=(
+                TextBlock(index=0, page=1, text="Competitive landscape"),
+                TextBlock(index=1, page=1, text="AMBU"),
+                TextBlock(index=2, page=1, text="no feedback, single use"),
+                TextBlock(index=3, page=1, text="Air Medici"),
+            ),
+        )
+
+    def test_fragments_spanning_non_adjacent_blocks_are_accepted(self) -> None:
+        facts = LifeSciencesFacts(
+            development_stage=_cited("x", "p. 1", "AMBU\nAir Medici"),  # type: ignore[arg-type]
+            regulatory_pathway=None,
+            indication=None,
+            next_milestone=None,
+            non_dilutive_funding_usd=None,
+            partnership_or_licensing_terms=None,
+            trial_or_validation_data=[],
+        )
+        assert grounding.check(facts, self._matrix_deck()) == ()
+
+    def test_a_single_invented_fragment_still_fails_the_whole_quote(self) -> None:
+        facts = LifeSciencesFacts(
+            development_stage=_cited("x", "p. 1", "AMBU\nPhilips Respironics"),  # type: ignore[arg-type]
+            regulatory_pathway=None,
+            indication=None,
+            next_milestone=None,
+            non_dilutive_funding_usd=None,
+            partnership_or_licensing_terms=None,
+            trial_or_validation_data=[],
+        )
+        (warning,) = grounding.check(facts, self._matrix_deck())
+        assert warning.reason == "quote_not_in_deck"
+
+    def test_table_cell_separators_are_fragment_boundaries(self) -> None:
+        assert grounding.contains(
+            grounding.normalise("Revenue") + grounding.normalise("10,620"),
+            "Revenue | 10,620",
+        )
+
+    def test_fragments_too_short_to_mean_anything_are_not_used_alone(self) -> None:
+        # "a | b | c" carries no evidence; it must not pass by fragment matching.
+        assert not grounding.contains("somethingunrelated", "a\nb\nc")
+
+
+class TestReflowedMultiColumnQuotes:
+    """A three-column roadmap reflows when quoted. That is not a fabrication."""
+
+    def _roadmap_deck(self) -> DeckDocument:
+        return DeckDocument(
+            path=Path("d.pdf"),
+            kind="pdf",
+            page_count=1,
+            blocks=(
+                TextBlock(
+                    index=0,
+                    page=1,
+                    text=(
+                        "Design Freeze & Design For       FDA Regulatory Process     Pilot Studies\n"
+                        "Manufacturing        Documentation, Testing & Submission    Initial Launch"
+                    ),
+                ),
+            ),
+        )
+
+    def test_a_faithfully_quoted_reflow_is_accepted(self) -> None:
+        facts = LifeSciencesFacts(
+            development_stage=_cited(  # type: ignore[arg-type]
+                "x",
+                "p. 1",
+                "Design Freeze & Design For\nManufacturing    FDA Regulatory Process    Pilot"
+                " Studies\nManufacturing    Documentation, Testing & Submission    Initial Launch",
+            ),
+            regulatory_pathway=None,
+            indication=None,
+            next_milestone=None,
+            non_dilutive_funding_usd=None,
+            partnership_or_licensing_terms=None,
+            trial_or_validation_data=[],
+        )
+        assert grounding.check(facts, self._roadmap_deck()) == ()
+
+    def test_one_invented_word_inside_a_reflow_is_still_caught(self) -> None:
+        facts = LifeSciencesFacts(
+            development_stage=_cited(  # type: ignore[arg-type]
+                "x",
+                "p. 1",
+                "Design Freeze & Design For\nManufacturing    CE Marking Submission    Pilot Studies",
+            ),
+            regulatory_pathway=None,
+            indication=None,
+            next_milestone=None,
+            non_dilutive_funding_usd=None,
+            partnership_or_licensing_terms=None,
+            trial_or_validation_data=[],
+        )
+        assert grounding.check(facts, self._roadmap_deck()) != ()
+
+    def test_an_invented_figure_is_caught_by_the_word_tier(self) -> None:
+        """The tier is permissive about arrangement, never about numbers."""
+        deck = DeckDocument(
+            path=Path("d.pdf"),
+            kind="pdf",
+            page_count=1,
+            blocks=(TextBlock(index=0, page=1, text="ARR grew to 2,400,000 this year"),),
+        )
+        facts = LifeSciencesFacts(
+            development_stage=_cited("x", "p. 1", "ARR grew to 9,900,000 this year"),  # type: ignore[arg-type]
+            regulatory_pathway=None,
+            indication=None,
+            next_milestone=None,
+            non_dilutive_funding_usd=None,
+            partnership_or_licensing_terms=None,
+            trial_or_validation_data=[],
+        )
+        (warning,) = grounding.check(facts, deck)
+        assert warning.reason == "quote_not_in_deck"

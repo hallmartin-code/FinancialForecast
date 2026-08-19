@@ -50,8 +50,11 @@ DeckDocument → DeckFacts → ModelAssumptions → FinancialModel → { PDF, XL
   names — which is what turns "cite your source" from an instruction into something
   verifiable. What the deck *claims* (`deck_projections`) is captured separately from
   anything this tool will model.
-- `assume/` — merges facts with a stage/sector benchmark pack into `ModelAssumptions`.
-  User overrides from `assumptions.yaml` sit at the top of the precedence chain.
+- `assume/` — merges facts with a business-model benchmark pack into `ModelAssumptions`.
+  `Resolver.pick` is the single choke point: nothing becomes an assumption without
+  passing through it, and it records the provenance it settled on — so the coverage
+  ratio is a fact about what happened, not a separate tally that could drift. User
+  overrides from `assumptions.yaml` sit at the top of the precedence chain.
 - `model/` — pure functions, no I/O. Monthly internally, aggregated to fiscal years.
 - `render/` — the workbook is the source of truth; the PDF is its executive rendering.
   Both are produced from one `FinancialModel`, so they cannot disagree.
@@ -76,6 +79,12 @@ DeckDocument → DeckFacts → ModelAssumptions → FinancialModel → { PDF, XL
 | Numeric metrics as a list, not nullable fields | `stated: list[MetricFact]` + `not_stated: list[FinancialMetric]` | **The API caps a schema at 16 union-typed parameters.** Twenty-odd nullable metrics returned a 400. The list form uses no unions and gives a *stronger* guarantee: the model must name what it looked for and did not find, rather than merely omitting a key. A metric missing from both lists is folded into `not_stated` and recorded in `omitted_metrics` — the safe direction, surfaced rather than hidden. A duplicated metric raises, because two values for one metric is genuinely ambiguous. |
 | Quote grounding | verbatim quote required, checked against the deck | Whitespace is stripped entirely before comparison: PDF layout extraction splits words unpredictably (`"70-ye a r-old"`), and a check that tripped over that would report correct extractions as fabrications. Quotes under 12 chars are skipped as too generic to mean anything. |
 | Cache key | `sha256(deck) + prompt_version + model + pass_name` | A hit across a prompt or model change would silently mix two extractors' output in one run. Each pass is cached separately, so editing one prompt does not invalidate the other. |
+| Grounding match tiers | contiguous → line/cell fragments → evidence-carrying words | A deck's text does not survive extraction in one piece. A competitor matrix quotes as non-adjacent blocks; a three-column roadmap reflows. All three tiers were added in response to real false positives on the AccuBreath deck (5 warnings → 0). The word tier is permissive about *arrangement*, never about *content* — every word and every figure must still be on the cited page, so an invented number is caught exactly as before. |
+| Benchmark `basis` field | `published` vs `convention` | A planning midpoint in common use is real and defensible but it is **not a citation**, and presenting it as one would be the same failure this tool exists to prevent. `convention` values render as "(2026, planning convention)" and carry `confidence="low"`. Counts: SaaS 1/28 published, life sciences 2/22, hardware 2/25 — i.e. these packs are mostly convention, and both outputs say so. |
+| Benchmarks are starting values | replace them via `init-assumptions` → edit → `--assumptions` | The dump annotates every line with its source so the benchmark lines are visibly the ones worth editing. User values outrank everything. |
+| `CORE_INPUTS` per business model | 8–12 named drivers, not every assumption | Coverage measures the inputs that *move* the model. A run can carry thirty benchmark values for rent-per-desk and still be a good model; it cannot if it invented the revenue base. |
+| Growth compounding | `(1+annual)^(1/12) − 1` | 118% annual growth is 6.7%/month, not 9.8%. Dividing by twelve overstates a five-year plan badly. |
+| Burn derivation | cash + raise ÷ stated runway | A deck saying "$4M buys 18 months" has stated its burn without using the word. Deriving beats reaching for a benchmark. |
 | Cache | `~/.cache/pitchdeck-cfo/<sha256(deck)+prompt_version+model>.json` | Iterating on rendering costs no API calls. `--no-cache` bypasses. |
 
 ## Layout
@@ -116,7 +125,7 @@ deselected in CI with `-m "not llm and not smoke"`.
 | 0 | Scaffold, config, CLI skeleton, CI, fixtures | **done** |
 | 1 | Ingest layer | **done** |
 | 2 | Extraction schema, prompts, client, cache | **done** |
-| 3 | Assumption engine + benchmarks | |
+| 3 | Assumption engine + benchmarks | **done** |
 | 4 | Modelling engine + accounting-integrity tests | |
 | 5 | Excel workbook renderer | |
 | 6 | One-pager PDF renderer + charts | |

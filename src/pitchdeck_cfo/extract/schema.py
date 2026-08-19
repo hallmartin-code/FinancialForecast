@@ -28,7 +28,7 @@ T = TypeVar("T")
 
 # Bumped whenever a prompt or this schema changes. Part of the cache key, so an edit
 # here invalidates cached extractions instead of serving a stale shape.
-PROMPT_VERSION = "2026-08-19.2"
+PROMPT_VERSION = "2026-08-19.4"
 
 
 class Evidence(BaseModel):
@@ -201,6 +201,10 @@ FinancialMetric = Literal[
     "tam_usd",
     "sam_usd",
     "som_usd",
+    # unit economics for a physical product
+    "device_asp_usd",
+    "consumable_price_usd",
+    "installed_base_units",
 ]
 
 ALL_FINANCIAL_METRICS: frozenset[FinancialMetric] = frozenset(get_args(FinancialMetric))

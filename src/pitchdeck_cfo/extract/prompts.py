@@ -50,11 +50,25 @@ the company's profile: who they are, what they sell, and what they are raising.
 
 Notes specific to this pass:
 
-- business_model classifies how revenue is earned, not what industry they are in. A
-  diagnostics company selling test kits per unit is transactional; a therapeutics
-  company with no product revenue and a regulatory path ahead of it is life_sciences;
-  a company charging a recurring subscription is saas. Use "unknown" when the deck
-  does not make it clear, and say so in business_model_rationale.
+- business_model classifies how revenue is earned, not what industry the company is
+  in. Decide it in this order and stop at the first that fits:
+
+  1. life_sciences -- no product revenue yet and a regulatory or clinical path ahead
+     of it. A therapeutic in preclinical or trials, whatever it eventually sells.
+  2. hardware -- revenue comes from shipping a physical good. A device, an
+     instrument, a test kit, a disposable, a consumable. This holds whether the good
+     is sold once or on a razor/razor-blade model with recurring consumables, and it
+     holds for medical devices and diagnostics that have a product on the market.
+  3. saas -- a recurring subscription for software.
+  4. marketplace -- the company takes a cut of transactions between other parties.
+  5. transactional -- per-transaction or usage-based revenue where nothing physical
+     ships: payments, API calls, bookings, processing.
+  6. services -- revenue is people's time.
+
+  A company shipping a physical product is hardware even when it charges per unit.
+  Per-unit pricing is not what makes something transactional; shipping no physical
+  good is. Use "unknown" only when the deck genuinely does not say what is sold, and
+  explain why in business_model_rationale.
 - business_model_rationale is your own reasoning, so it carries no citation. Keep it
   to one or two sentences and refer to what the deck actually shows.
 - raise_amount_usd and pre_money_valuation_usd are in whole dollars: a deck saying
@@ -77,6 +91,10 @@ Notes specific to this pass:
   Between them the two lists must name every metric. Putting a metric in "not_stated"
   is the correct, expected answer for most decks -- it is how you say "the deck does
   not give this" without leaving a gap someone later mistakes for a real figure.
+- For a company selling a physical product, device_asp_usd is the price of the durable
+  unit and consumable_price_usd the price of one disposable. Use the list or MSRP price
+  where the deck gives both list and distributor pricing, and put the distributor
+  figure nowhere -- the model derives it from the distributor margin.
 - Percentages are numbers, not fractions: 71% gross margin is 71.0, not 0.71.
 - Dollar figures are whole dollars: $2.4M ARR is 2400000.
 - Separate history from forecast. historical_revenue is for periods that have already

@@ -30,6 +30,14 @@ from pitchdeck_cfo.ingest.base import DeckDocument
 # rather than producing noise that trains the reader to ignore warnings.
 MIN_CHECKABLE_QUOTE = 12
 
+# A single fragment of a multi-part quote. Lower than the whole-quote floor, since a
+# competitor name or a line item is legitimately short.
+_MIN_FRAGMENT = 4
+
+# Words shorter than this are connectives that carry no evidence. Numerals are kept
+# whatever their length -- a figure is precisely what is worth verifying.
+_MIN_WORD = 4
+
 _PAGE_NUMBER = re.compile(r"(\d+)")
 
 # Typography the extraction round-trips through: smart quotes, dashes and ligature
@@ -72,6 +80,64 @@ def _page_text(document: DeckDocument) -> dict[int, str]:
     return pages
 
 
+def _fragments(quote: str) -> list[str]:
+    """Split a quote into the separate assertions it is made of.
+
+    A deck's competitor matrix or use-of-funds column reads as one visual group but
+    extracts as several non-adjacent blocks, so a faithful quote of it is not a
+    contiguous run of the page text. Splitting on line and cell boundaries lets each
+    piece be verified on its own, which keeps the check strict -- every fragment must
+    still be found on the cited page -- without calling a correct quote a fabrication.
+    """
+    pieces: list[str] = []
+    for line in quote.replace("|", "\n").splitlines():
+        cleaned = normalise(line)
+        if len(cleaned) >= _MIN_FRAGMENT:
+            pieces.append(cleaned)
+    return pieces
+
+
+def _words(quote: str) -> list[str]:
+    """The tokens of a quote that carry evidence.
+
+    Short connectives are dropped; numbers are kept whatever their length, since a
+    figure is exactly the thing worth verifying. Commas inside numerals go, so
+    "10,620" and "10620" are the same token.
+    """
+    stripped = quote.translate(_TRANSLATIONS).lower().replace(",", "")
+    tokens = re.findall(r"[a-z0-9$%.]+", stripped)
+    return [
+        token
+        for token in {t.strip(".") for t in tokens}
+        if len(token) >= _MIN_WORD or any(ch.isdigit() for ch in token)
+    ]
+
+
+def contains(haystack: str, quote: str) -> bool:
+    """Is this quote supported by the text of the page it was cited to?
+
+    Three tiers, weakest last, because a deck's text does not survive extraction in
+    one piece:
+
+    1. contiguous -- the quote appears verbatim.
+    2. fragments  -- every line or table cell of it appears. Covers a quote of a
+       visual grouping whose parts extract as non-adjacent blocks.
+    3. words      -- every evidence-carrying token appears. Covers a multi-column
+       layout the model reflowed while quoting it faithfully.
+
+    Tier 3 is permissive about arrangement but not about content: every word and
+    every figure must still be on that page, so an invented number or an invented
+    company name is caught exactly as before.
+    """
+    if normalise(quote) in haystack:
+        return True
+    pieces = _fragments(quote)
+    if pieces and all(piece in haystack for piece in pieces):
+        return True
+    words = _words(quote)
+    return bool(words) and all(normalise(word) in haystack for word in words)
+
+
 def _iter_evidence(node: Any, path: str = "") -> list[tuple[str, Evidence]]:
     """Walk a model tree and yield every `Evidence` with its dotted field path."""
     found: list[tuple[str, Evidence]] = []
@@ -98,14 +164,13 @@ def _classify(
     quote: str, citation: str, pages: dict[int, str], whole_deck: str
 ) -> GroundingReason | None:
     page = page_from_citation(citation)
-    needle = normalise(quote)
 
     if page is None or page not in pages:
         # Still worth distinguishing an invented page from an invented quote.
-        return "page_not_found" if needle in whole_deck else "quote_not_in_deck"
-    if needle in pages[page]:
+        return "page_not_found" if contains(whole_deck, quote) else "quote_not_in_deck"
+    if contains(pages[page], quote):
         return None
-    return "quote_not_on_page" if needle in whole_deck else "quote_not_in_deck"
+    return "quote_not_on_page" if contains(whole_deck, quote) else "quote_not_in_deck"
 
 
 def check(model: BaseModel, document: DeckDocument) -> tuple[GroundingWarning, ...]:

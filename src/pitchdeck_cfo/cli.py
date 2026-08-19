@@ -16,8 +16,10 @@ from rich.panel import Panel
 from rich.table import Table
 
 from pitchdeck_cfo import __version__
+from pitchdeck_cfo.assume.schema import ModelAssumptions
 from pitchdeck_cfo.config import MAX_YEARS, MIN_YEARS, Effort, load_settings
 from pitchdeck_cfo.errors import DeckNotFoundError, PitchdeckCFOError, UnsupportedFileTypeError
+from pitchdeck_cfo.models import Provenance
 
 app = typer.Typer(
     name="pitchdeck-cfo",
@@ -229,12 +231,61 @@ def init_assumptions(
     verbose: VerboseOpt = False,
 ) -> None:
     """Print the resolved assumptions as editable YAML, with provenance on every value."""
+    from pitchdeck_cfo.assume import dump, resolve, resolved_names
+    from pitchdeck_cfo.extract import default_cache, extract_facts
+    from pitchdeck_cfo.ingest import load_deck
+
     try:
         _validate_deck_path(deck)
-        load_settings(model=model, years=years)
+        settings = load_settings(model=model, years=years)
+        document = load_deck(deck, ocr=ocr, min_text_chars=settings.min_text_chars)
+        facts = extract_facts(
+            document,
+            settings=settings,
+            cache=default_cache(settings, enabled=not no_cache),
+        )
+        assumptions = resolve(
+            facts,
+            horizon_years=settings.years,
+            loaded_multiplier=None,
+        )
     except PitchdeckCFOError as exc:
         _fail(exc)
-    raise NotImplementedError("assumption resolution lands in phase 3")
+
+    # stdout stays clean so the command can be redirected into a file.
+    print(dump(assumptions, resolved_names(assumptions)), end="")
+    _report_coverage(assumptions, to_stderr=True)
+
+
+def _report_coverage(assumptions: ModelAssumptions, *, to_stderr: bool = False) -> None:
+    """Show how much of the model rests on the company's own numbers."""
+    coverage = assumptions.coverage
+    target = err_console if to_stderr else console
+    counts = assumptions.by_provenance()
+
+    table = Table(title="Provenance", title_style="bold", header_style="dim", box=None)
+    table.add_column("source")
+    table.add_column("core inputs", justify="right")
+    table.add_column("all values", justify="right")
+    labels: tuple[tuple[Provenance, str], ...] = (
+        ("deck", "deck"),
+        ("derived", "derived †"),
+        ("benchmark", "benchmark ‡"),
+        ("user", "user §"),
+    )
+    for source, label in labels:
+        core = len(coverage.by_source.get(source, ()))
+        table.add_row(label, str(core), str(counts.get(source, 0)))
+    target.print(table)
+
+    ratio = coverage.deck_ratio
+    style = "green" if ratio >= 0.6 else "yellow" if ratio >= 0.4 else "red"
+    target.print(f"[{style}]{coverage.summary_line()}[/{style}]")
+    if assumptions.grounding_warning_count:
+        target.print(
+            f"[yellow]{assumptions.grounding_warning_count} extracted quote(s) could not be "
+            f"confirmed against the deck.[/yellow]"
+        )
 
 
 @app.command()
@@ -246,6 +297,8 @@ def validate(
     verbose: VerboseOpt = False,
 ) -> None:
     """Check an assumptions file for schema and internal-consistency errors, offline."""
+    from pitchdeck_cfo.assume import load
+
     if not assumptions.exists():
         _fail(
             PitchdeckCFOError(
@@ -253,7 +306,15 @@ def validate(
                 "Generate one with `pitchdeck-cfo init-assumptions <deck> > assumptions.yaml`.",
             )
         )
-    raise NotImplementedError("assumption validation lands in phase 3")
+    try:
+        values = load(assumptions)
+    except PitchdeckCFOError as exc:
+        _fail(exc)
+
+    console.print(f"[green]ok[/green] {assumptions} parsed: {len(values)} override(s)")
+    if verbose:
+        for name, value in sorted(values.items()):
+            console.print(f"  {name} = {value}")
 
 
 if __name__ == "__main__":  # pragma: no cover
