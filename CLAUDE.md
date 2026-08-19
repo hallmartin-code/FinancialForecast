@@ -100,6 +100,9 @@ DeckDocument → DeckFacts → ModelAssumptions → FinancialModel → { PDF, XL
 | Workbook is formula-driven, not value-driven | every downstream cell references `Assumptions` | A workbook of pasted numbers is a screenshot with gridlines — an investor cannot stress-test it. This means the model exists twice, in Python and in Excel formulas, and the equivalence tests are what keep them honest. Verified agreement: worst relative difference **2.8e-15**. |
 | Excel formulas are verified, not assumed | `formulas` package compiles and evaluates the workbook | Writing formulas and *looking* at them is not evidence. Evaluating them caught two real bugs on the first run — see below. |
 | No `OFFSET` in generated formulas | `SUMPRODUCT` over an explicit month-index row | `OFFSET` is not implemented by every spreadsheet engine and returned `#NAME?`, which poisoned depreciation → EBIT → net income. |
+| Web app calls `pipeline.run` | the same function the CLI calls | A web app that reimplements the pipeline is a second implementation that will drift from the first. |
+| Web app is open unless `APP_PASSWORD` is set, and says which | disclosure rendered from the actual config | Every build spends the owner's API key. A deployment that quietly does that is the failure to design against, so the upload page states its real posture rather than a generic promise. |
+| Uploads deleted on a timer | `JOB_TTL_MINUTES`, default 120 | An uploaded deck is confidential and has no business outliving the job. |
 | Metrics are computed, never restated | from the model's own spend and wins | The deck's CAC is a claim; a CAC computed from the S&M the model actually spends is a result, and the two disagreeing is itself information. Every metric returns `None` where undefined rather than 0 or infinity. |
 | Cache | `~/.cache/pitchdeck-cfo/<sha256(deck)+prompt_version+model>.json` | Iterating on rendering costs no API calls. `--no-cache` bypasses. |
 
@@ -125,6 +128,9 @@ other module depends on getting right.
 python -m venv .venv
 .venv/Scripts/python -m pip install -e ".[dev]"
 
+# Web app, locally
+.venv/Scripts/python -m uvicorn app:app --reload --port 8000
+
 .venv/Scripts/pitchdeck-cfo --help
 .venv/Scripts/pitchdeck-cfo build tests/fixtures/decks/saas_meridian.pptx --out ./output
 
@@ -146,8 +152,9 @@ deselected in CI with `-m "not llm and not smoke"`.
 | 3 | Assumption engine + benchmarks | **done** |
 | 4 | Modelling engine + accounting-integrity tests | **done** |
 | 5 | Excel workbook renderer | **done** |
-| 6 | One-pager PDF renderer + charts | |
-| 7 | Polish: caching, `--strict`, README | |
+| 6 | One-pager PDF renderer + charts | **done** |
+| 7 | Polish: caching, `--strict`, README | **done** |
+| 8 | FastAPI web app + Railway deploy | **done** |
 
 Unbuilt stages raise `NotImplementedError`. There are no placeholder returns anywhere
 in this repo, by policy — a plausible-looking fake number is worse than a crash.

@@ -1,0 +1,27 @@
+# Railway / Nixpacks build configuration.
+#
+# Deliberately lean. Every runtime dependency ships a self-contained wheel:
+# ReportLab uses built-in Type 1 core fonts so no system fonts are needed, and
+# matplotlib runs headless on the Agg backend.
+#
+# Tesseract and poppler are NOT installed. They are only needed for --ocr on a
+# scanned deck, they add several hundred megabytes to the image, and the app
+# returns an actionable error rather than failing obscurely without them.
+
+[phases.setup]
+nixPkgs = ["python311"]
+
+[phases.install]
+cmds = [
+  "python -m venv /opt/venv",
+  ". /opt/venv/bin/activate && pip install --no-cache-dir -r requirements.txt",
+]
+
+[start]
+cmd = "uvicorn app:app --host 0.0.0.0 --port $PORT --timeout-keep-alive 180"
+
+[variables]
+PYTHONUNBUFFERED = "1"
+PYTHONDONTWRITEBYTECODE = "1"
+PIP_DISABLE_PIP_VERSION_CHECK = "1"
+MPLBACKEND = "Agg"

@@ -12,3 +12,4 @@ output/
 *.xlsx
 *.pdf
 !tests/fixtures/decks/*.pdf
+_webtest.py

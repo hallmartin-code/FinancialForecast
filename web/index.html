@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pitchdeck-cfo</title>
+<style>
+  :root {
+    --ink: #111; --muted: #666; --faint: #ddd; --bg: #fafafa; --card: #fff;
+    --accent: #0072B2; --warn: #B03A00; --ok: #009E73;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --ink:#eee; --muted:#999; --faint:#333; --bg:#141414; --card:#1c1c1c; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 760px; margin: 0 auto; padding: 40px 20px 80px; }
+  h1 { font-size: 24px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); font-size: 14px; margin: 0 0 24px; }
+  .card {
+    background: var(--card); border: 1px solid var(--faint); border-radius: 10px;
+    padding: 20px; margin-bottom: 16px;
+  }
+  .disclosure { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
+  .disclosure.open { color: var(--warn); font-weight: 600; }
+  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  input[type=file] {
+    width: 100%; padding: 22px; border: 1.5px dashed var(--faint); border-radius: 8px;
+    background: transparent; color: var(--ink); cursor: pointer;
+  }
+  .row { display: flex; gap: 20px; align-items: end; margin-top: 16px; flex-wrap: wrap; }
+  .row > div { flex: 1 1 140px; }
+  select, button {
+    font: inherit; padding: 10px 14px; border-radius: 8px;
+    border: 1px solid var(--faint); background: var(--card); color: var(--ink);
+  }
+  select { width: 100%; }
+  button {
+    background: var(--accent); color: #fff; border-color: var(--accent);
+    font-weight: 600; cursor: pointer; padding: 11px 22px;
+  }
+  button[disabled] { opacity: .5; cursor: default; }
+  .check { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+  .check input { width: 16px; height: 16px; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  #panel { display: none; }
+  .status { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+  .spinner {
+    width: 14px; height: 14px; border: 2px solid var(--faint);
+    border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 14px; }
+  th, td { text-align: right; padding: 5px 4px; border-bottom: 1px solid var(--faint); }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; }
+  .neg { color: var(--warn); }
+  .coverage { font-size: 13px; margin-top: 14px; padding: 10px 12px; border-radius: 8px;
+              background: var(--bg); border: 1px solid var(--faint); }
+  .downloads { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+  .downloads a {
+    text-decoration: none; padding: 11px 18px; border-radius: 8px; font-weight: 600;
+    font-size: 14px; background: var(--accent); color: #fff;
+  }
+  .downloads a.alt { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+  .error { color: var(--warn); font-size: 14px; }
+  .error .remedy { color: var(--muted); font-weight: normal; margin-top: 6px; }
+  footer { color: var(--muted); font-size: 12px; margin-top: 28px; line-height: 1.7; }
+  dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 13px; margin: 14px 0 0; }
+  dt { color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>pitchdeck-cfo</h1>
+  <p class="sub">A deck in, an auditable financial model and a one-page summary out.</p>
+  <p class="disclosure" id="disclosure">{{DISCLOSURE}}</p>
+
+  <form class="card" id="form">
+    <label for="deck">Investor deck — .pdf or .pptx, up to {{MAX_MB}} MB</label>
+    <input type="file" id="deck" name="deck" accept=".pdf,.pptx" required>
+    <div class="row">
+      <div>
+        <label for="years">Forecast horizon</label>
+        <select id="years" name="years">
+          <option value="3">3 years</option>
+          <option value="5" selected>5 years</option>
+          <option value="7">7 years</option>
+        </select>
+      </div>
+      <div>
+        <label class="check" for="strict">
+          <input type="checkbox" id="strict" name="strict">
+          Strict mode
+        </label>
+        <div class="hint">Refuse to build if the deck states too little.</div>
+      </div>
+      <div style="flex:0 0 auto">
+        <button type="submit" id="go">Build</button>
+      </div>
+    </div>
+  </form>
+
+  <div class="card" id="panel"></div>
+
+  <footer>
+    Every number in the output is traceable to the deck, an arithmetic derivation, or a
+    labelled benchmark. Benchmark-supplied values are marked so you can see which parts of
+    the model the company did not give you.<br>
+    Uploaded decks and generated files are deleted after {{TTL}} minutes.<br>
+    pitchdeck-cfo {{VERSION}} · TEN Capital Network
+  </footer>
+</main>
+
+<script>
+const form = document.getElementById("form");
+const panel = document.getElementById("panel");
+const go = document.getElementById("go");
+const disclosure = document.getElementById("disclosure");
+if (disclosure.textContent.trim().startsWith("⚠")) disclosure.classList.add("open");
+
+const money = n => (n < 0 ? "(" : "") + Math.abs(n).toLocaleString(undefined,
+  {maximumFractionDigits: 0}) + (n < 0 ? ")" : "");
+
+function show(html) { panel.style.display = "block"; panel.innerHTML = html; }
+
+form.addEventListener("submit", async event => {
+  event.preventDefault();
+  go.disabled = true;
+  show('<div class="status"><div class="spinner"></div><span>uploading…</span></div>');
+
+  const body = new FormData(form);
+  let started;
+  try {
+    const response = await fetch("/build", { method: "POST", body });
+    started = await response.json();
+    if (!response.ok) throw new Error(started.error || "upload failed");
+  } catch (err) {
+    show('<div class="error">' + err.message + "</div>");
+    go.disabled = false;
+    return;
+  }
+  poll(started.id);
+});
+
+async function poll(id) {
+  let job;
+  try {
+    const response = await fetch("/status/" + id);
+    job = await response.json();
+    if (!response.ok) throw new Error(job.error || "lost the job");
+  } catch (err) {
+    show('<div class="error">' + err.message + "</div>");
+    go.disabled = false;
+    return;
+  }
+
+  if (job.status === "queued" || job.status === "running") {
+    show('<div class="status"><div class="spinner"></div><span>' +
+         (job.message || job.status) + "…</span></div>");
+    setTimeout(() => poll(id), 1200);
+    return;
+  }
+
+  go.disabled = false;
+
+  if (job.status === "failed") {
+    show('<div class="error"><strong>' + job.error + "</strong>" +
+         (job.remedy ? '<div class="remedy">' + job.remedy + "</div>" : "") + "</div>");
+    return;
+  }
+
+  const years = job.summary[0].values.length;
+  const head = Array.from({length: years}, (_, i) => "<th>Y" + (i + 1) + "</th>").join("");
+  const rows = job.summary.map(r =>
+    "<tr><td>" + r.line + "</td>" +
+    r.values.map(v => '<td class="' + (v < 0 ? "neg" : "") + '">' + money(v) + "</td>").join("") +
+    "</tr>").join("");
+  const turns = Object.entries(job.break_even)
+    .map(([k, v]) => "<dt>" + k + "</dt><dd>" + v + "</dd>").join("");
+  const ratio = job.deck_ratio == null ? "" :
+    Math.round(job.deck_ratio * 100) + "% of core inputs came from the deck itself.";
+
+  show(
+    "<h2 style='margin:0 0 2px;font-size:18px'>" + (job.company || "Model") + "</h2>" +
+    "<div class='sub' style='margin:0'>$ figures, by fiscal year</div>" +
+    "<table><thead><tr><th></th>" + head + "</tr></thead><tbody>" + rows + "</tbody></table>" +
+    "<dl>" + turns + "</dl>" +
+    "<div class='coverage'>" + (job.coverage || "") + "<br>" + ratio +
+      (job.warnings ? "<br><span class='neg'>" + job.warnings +
+        " extracted quote(s) could not be confirmed against the deck.</span>" : "") +
+    "</div>" +
+    "<div class='downloads'>" +
+      "<a href='" + job.onepager_url + "'>Download one-pager (PDF)</a>" +
+      "<a class='alt' href='" + job.workbook_url + "'>Download model (XLSX)</a>" +
+    "</div>"
+  );
+}
+</script>
+</body>
+</html>
