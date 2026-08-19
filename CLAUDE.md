@@ -61,7 +61,7 @@ DeckDocument → DeckFacts → ModelAssumptions → FinancialModel → { PDF, XL
 | Decision | Choice | Why |
 |---|---|---|
 | Extraction model | `claude-opus-5` (configurable) | Extraction is the fabrication-sensitive stage. It does not default to the cheap model. The original brief named `claude-sonnet-4-5`, which is prior-generation. |
-| Revenue engines at v1 | **life sciences** and **SaaS** | Matches TEN Capital's actual deal mix. `marketplace` / `transactional` / `hardware` raise `UnsupportedBusinessModelError` — a clear refusal beats a marketplace modelled as if it were SaaS. |
+| Revenue engines at v1 | **life sciences**, **SaaS**, **hardware** | Matches the actual deal mix. Hardware was added after the real AccuBreath deck extracted as a razor/razor-blade device business — device medtech fits neither of the other two, and forcing it into `life_sciences` would produce a confident, wrong model. `marketplace` / `transactional` / `services` raise `UnsupportedBusinessModelError`: a clear refusal beats a marketplace modelled as if it were SaaS. |
 | One-pager branding | TEN Capital logo in the header band | The footer is reserved for the provenance coverage ratio and disclaimer, which is the more load-bearing content. |
 | Fixture decks | Real decks from the sibling projects | Committed: three small real `.pptx` decks plus a small image-only PDF derived from a real scanned deck. The 18.7 MB AccuBreath deck and the 50 MB scanned deck stay out of git and are wired as `smoke`-marked tests that skip when absent. |
 | Python | 3.11+ target, developed on 3.14.6 | Only 3.14 is installed on this machine. All wheels resolve. |

@@ -102,7 +102,12 @@ BusinessModelKind = Literal[
 
 # Revenue engines implemented today. Anything else raises rather than being modelled
 # as if it were something it is not -- see errors.UnsupportedBusinessModelError.
-SUPPORTED_BUSINESS_MODELS: tuple[BusinessModelKind, ...] = ("life_sciences", "saas")
+#
+# hardware is here because medtech device companies are a large share of the deal flow
+# this tool was built for, and they do not fit either of the others: a company selling
+# a $4,000 device plus a $30 consumable is neither milestone-driven pre-revenue nor a
+# subscription. Forcing it into life_sciences would produce a confident, wrong model.
+SUPPORTED_BUSINESS_MODELS: tuple[BusinessModelKind, ...] = ("life_sciences", "saas", "hardware")
 
 
 class BusinessModel(BaseModel):
