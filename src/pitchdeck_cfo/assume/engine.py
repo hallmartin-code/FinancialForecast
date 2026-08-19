@@ -253,6 +253,44 @@ def _next_month(anchor: date) -> str:
     return f"{year:04d}-{month:02d}"
 
 
+# Magnitudes a deck's financial table declares above its numbers.
+_UNIT_MULTIPLIERS: tuple[tuple[str, float], ...] = (
+    ("000s", 1_000.0),
+    ("thousand", 1_000.0),
+    ("$k", 1_000.0),
+    ("million", 1_000_000.0),
+    ("$m", 1_000_000.0),
+    ("mm", 1_000_000.0),
+    ("billion", 1_000_000_000.0),
+)
+
+
+def _unit_multiplier(unit: str | None) -> float:
+    """What to multiply a table's figures by to reach whole currency units.
+
+    A cell reading 2,430 under a "$000s" heading is $2,430,000. Getting this wrong
+    is a thousand-fold error in the most prominent comparison on the one-pager.
+    """
+    if not unit:
+        return 1.0
+    lowered = unit.lower()
+    for token, multiplier in _UNIT_MULTIPLIERS:
+        if token in lowered:
+            return multiplier
+    return 1.0
+
+
+def _deck_revenue_projection(facts: DeckFacts) -> tuple[tuple[str, float], ...]:
+    """The deck's own revenue forecast, as a claim. Never an input to the model."""
+    for series in facts.financials.deck_projections:
+        label = series.label.strip().lower()
+        if label not in ("revenue", "total revenue", "net revenue", "sales"):
+            continue
+        multiplier = _unit_multiplier(series.unit)
+        return tuple((entry.period, entry.amount.value * multiplier) for entry in series.values)
+    return ()
+
+
 def _annual_to_monthly_growth(annual_pct: float) -> float:
     """A 118% annual growth rate is not 9.8% a month. Compound it properly."""
     return float(((1.0 + annual_pct / 100.0) ** (1.0 / 12.0) - 1.0) * 100.0)
@@ -523,6 +561,7 @@ def resolve(
         tax=_tax(r),
         coverage=r.coverage(CORE_INPUTS[business_model]),
         grounding_warning_count=len(facts.grounding_warnings),
+        deck_revenue_projection=_deck_revenue_projection(facts),
     )
     return assumptions
 

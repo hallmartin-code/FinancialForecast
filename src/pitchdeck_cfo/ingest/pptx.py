@@ -13,6 +13,7 @@ from typing import Any
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
 
+from pitchdeck_cfo.errors import CorruptDeckError
 from pitchdeck_cfo.ingest.base import Block, DeckDocument, TableBlock, TextBlock, TextKind
 
 
@@ -53,7 +54,10 @@ def _notes_text(slide: Any) -> str:
 
 def load_pptx(path: Path) -> DeckDocument:
     """Read a .pptx into a `DeckDocument`."""
-    prs = Presentation(str(path))
+    try:
+        prs = Presentation(str(path))
+    except Exception as exc:  # a mislabelled or truncated file
+        raise CorruptDeckError(path, str(exc) or type(exc).__name__) from exc
     blocks: list[Block] = []
     index = 0
 

@@ -79,6 +79,19 @@ class FinancialModel(BaseModel):
         return self.pnl_annual["Revenue"][-1]
 
     @property
+    def deck_final_year_revenue(self) -> float | None:
+        """The last year of the company's own revenue forecast, if it gave one.
+
+        Kept strictly separate from the model's own number. The one-pager compares
+        them and says so when they disagree, because a partner reading a model that
+        is an order of magnitude below the deck needs that on the page.
+        """
+        projection = self.assumptions.deck_revenue_projection
+        if not projection:
+            return None
+        return max(value for _, value in projection)
+
+    @property
     def final_year_ebitda_margin(self) -> float | None:
         revenue_value = self.final_year_revenue
         if revenue_value == 0:

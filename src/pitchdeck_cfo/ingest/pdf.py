@@ -20,6 +20,7 @@ from pathlib import Path
 import pdfplumber
 from pypdf import PdfReader
 
+from pitchdeck_cfo.errors import CorruptDeckError
 from pitchdeck_cfo.ingest.base import Block, DeckDocument, TableBlock, TextBlock
 
 # pdfplumber finds a "table" wherever a deck uses ruled lines for layout. Real tables
@@ -102,8 +103,13 @@ def load_pdf(path: Path) -> DeckDocument:
     check belongs to the caller, which knows whether --ocr was requested.
     """
     with _quiet_pypdf():
-        reader = PdfReader(str(path))
-        tables = _tables_by_page(path)
+        try:
+            reader = PdfReader(str(path))
+            tables = _tables_by_page(path)
+        except CorruptDeckError:
+            raise
+        except Exception as exc:  # pypdf and pdfplumber raise a wide variety
+            raise CorruptDeckError(path, str(exc) or type(exc).__name__) from exc
         blocks: list[Block] = []
         index = 0
 

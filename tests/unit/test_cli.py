@@ -52,16 +52,29 @@ class TestInputValidation:
         assert "No such deck" in result.output
 
 
-class TestNoSilentStubs:
-    """An unbuilt stage must raise, never return plausible-looking data."""
+class TestDamagedInput:
+    """A damaged file must produce a remedy, not a traceback.
 
-    def test_build_raises_rather_than_faking_output(self, tmp_path: Path) -> None:
+    This matters most for the web app, where the file arrives from a browser and an
+    interrupted upload is routine.
+    """
+
+    def test_a_truncated_pdf_is_actionable(self, tmp_path: Path) -> None:
         deck = tmp_path / "d.pdf"
         deck.write_bytes(b"%PDF-1.4\n")
         result = runner.invoke(app, ["build", str(deck)])
-        assert isinstance(result.exception, NotImplementedError)
+        assert result.exit_code == 1
+        assert "could not be read" in result.output
+        assert "Re-export the deck" in result.output
 
-    def test_validate_missing_file_is_actionable_not_notimplemented(self, tmp_path: Path) -> None:
+    def test_a_file_that_is_not_really_a_pptx_is_actionable(self, tmp_path: Path) -> None:
+        deck = tmp_path / "d.pptx"
+        deck.write_bytes(b"this is not a zip archive")
+        result = runner.invoke(app, ["build", str(deck)])
+        assert result.exit_code == 1
+        assert "could not be read" in result.output
+
+    def test_validate_missing_file_is_actionable(self, tmp_path: Path) -> None:
         result = runner.invoke(app, ["validate", str(tmp_path / "a.yaml")])
         assert result.exit_code == 1
         assert "init-assumptions" in result.output

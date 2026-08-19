@@ -48,6 +48,21 @@ class DeckNotFoundError(PitchdeckCFOError):
         )
 
 
+class CorruptDeckError(PitchdeckCFOError):
+    """The file has the right extension but cannot be parsed.
+
+    Matters most for the web app, where the file arrives from a browser and may be
+    truncated by an interrupted upload or simply mislabelled.
+    """
+
+    def __init__(self, path: Path, detail: str) -> None:
+        super().__init__(
+            f"{path.name} could not be read: {detail}",
+            "The file looks damaged or is not really the format its extension claims. "
+            "Re-export the deck and try again.",
+        )
+
+
 class InsufficientTextError(PitchdeckCFOError):
     """A PDF that yields almost no text is a scan, not a text PDF."""
 

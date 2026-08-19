@@ -268,6 +268,15 @@ class ModelAssumptions(BaseModel):
     coverage: CoverageReport
     grounding_warning_count: int = 0
 
+    deck_revenue_projection: tuple[tuple[str, float], ...] = Field(
+        default=(),
+        description=(
+            "The company's own forward revenue projection, period by period, in whole "
+            "currency units. Recorded as a claim and never used as a model input -- it "
+            "exists so the one-pager can state where the deck and this model disagree."
+        ),
+    )
+
     def by_provenance(self) -> dict[Provenance, int]:
         """How many leaf values came from each source. Drives the footer legend."""
         counts: dict[Provenance, int] = {"deck": 0, "derived": 0, "benchmark": 0, "user": 0}

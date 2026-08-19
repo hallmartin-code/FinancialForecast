@@ -138,12 +138,44 @@ def build(
     verbose: VerboseOpt = False,
 ) -> None:
     """Build the one-pager PDF and the financial model workbook."""
+    from pitchdeck_cfo import pipeline
+
     try:
         _validate_deck_path(deck)
-        load_settings(model=model, effort=effort, years=years)
+        settings = load_settings(model=model, effort=effort, years=years)
+
+        with console.status("[dim]starting[/dim]", spinner="dots") as status:
+            result = pipeline.run(
+                deck,
+                out,
+                settings=settings,
+                assumptions_file=assumptions,
+                strict=strict,
+                ocr=ocr,
+                use_cache=not no_cache,
+                progress=lambda message: status.update(f"[dim]{message}[/dim]"),
+            )
     except PitchdeckCFOError as exc:
         _fail(exc)
-    raise NotImplementedError("build pipeline lands in phase 7; phases 3-6 build its stages")
+
+    console.print(f"[green]wrote[/green] {result.onepager_path}")
+    console.print(f"[green]wrote[/green] {result.workbook_path}")
+    _report_coverage(result.assumptions)
+
+    summary = Table(title="Financial summary", title_style="bold", header_style="dim", box=None)
+    summary.add_column("")
+    for label in result.model.year_labels:
+        summary.add_column(label, justify="right")
+    for line in ("Revenue", "Gross Profit", "EBITDA", "Net Income"):
+        summary.add_row(line, *[f"{v:,.0f}" for v in result.model.pnl_annual[line]])
+    summary.add_row("Ending cash", *[f"{v:,.0f}" for v in result.model.ending_cash])
+    console.print(summary)
+
+    for label, value in result.model.break_even.items():
+        console.print(f"  [dim]{label}:[/dim] {value}")
+
+    if verbose:
+        _report_grounding(result.facts)
 
 
 @app.command()
