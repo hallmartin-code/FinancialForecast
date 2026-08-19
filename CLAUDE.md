@@ -61,6 +61,10 @@ DeckDocument → DeckFacts → ModelAssumptions → FinancialModel → { PDF, XL
   reconcile.
 - `render/` — the workbook is the source of truth; the PDF is its executive rendering.
   Both are produced from one `FinancialModel`, so they cannot disagree.
+  **The workbook re-implements the model in Excel formulas**, so changing an
+  assumption recalculates everything without Python. That duplication is the point,
+  and `tests/render/` compiles the workbook with a spreadsheet engine and asserts
+  every P&L line and the cash balance match the Python model.
 
 ## Decisions
 
@@ -93,6 +97,9 @@ DeckDocument → DeckFacts → ModelAssumptions → FinancialModel → { PDF, XL
 | Margin expansion is an output | sub-linear hosting curve (`revenue^0.85`) | Most models assert margin improving from 65% to 80%. Here the cost curve produces it; set the exponent to 1.0 and the expansion disappears. |
 | Accounting ties use **absolute** dollar tolerance | `atol=$1, rtol=0` | numpy's default `rtol=1e-5` sounds strict and is not: on a $30M cash balance it silently accepts a $300 discrepancy, and the error it tolerates grows with the company. Caught by a test that deliberately broke a tie. |
 | Non-finite guard | `check_integrity` names any NaN line | A NaN compares unequal to everything including itself, so it surfaces as some unrelated tie failure with a misleading message. Found via a zero-valued G&A ratio dividing by zero. |
+| Workbook is formula-driven, not value-driven | every downstream cell references `Assumptions` | A workbook of pasted numbers is a screenshot with gridlines — an investor cannot stress-test it. This means the model exists twice, in Python and in Excel formulas, and the equivalence tests are what keep them honest. Verified agreement: worst relative difference **2.8e-15**. |
+| Excel formulas are verified, not assumed | `formulas` package compiles and evaluates the workbook | Writing formulas and *looking* at them is not evidence. Evaluating them caught two real bugs on the first run — see below. |
+| No `OFFSET` in generated formulas | `SUMPRODUCT` over an explicit month-index row | `OFFSET` is not implemented by every spreadsheet engine and returned `#NAME?`, which poisoned depreciation → EBIT → net income. |
 | Metrics are computed, never restated | from the model's own spend and wins | The deck's CAC is a claim; a CAC computed from the S&M the model actually spends is a result, and the two disagreeing is itself information. Every metric returns `None` where undefined rather than 0 or infinity. |
 | Cache | `~/.cache/pitchdeck-cfo/<sha256(deck)+prompt_version+model>.json` | Iterating on rendering costs no API calls. `--no-cache` bypasses. |
 
@@ -138,7 +145,7 @@ deselected in CI with `-m "not llm and not smoke"`.
 | 2 | Extraction schema, prompts, client, cache | **done** |
 | 3 | Assumption engine + benchmarks | **done** |
 | 4 | Modelling engine + accounting-integrity tests | **done** |
-| 5 | Excel workbook renderer | |
+| 5 | Excel workbook renderer | **done** |
 | 6 | One-pager PDF renderer + charts | |
 | 7 | Polish: caching, `--strict`, README | |
 

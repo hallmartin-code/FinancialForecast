@@ -20,3 +20,7 @@ jobs:
       # No ANTHROPIC_API_KEY in CI: extraction tests use a mocked client and the
       # `llm` and `smoke` markers are deselected.
       - run: pytest -m "not llm and not smoke" --cov
+      # The workbook equivalence tests compile every formula with a spreadsheet
+      # engine. Slow, and the single most important thing the suite checks, so
+      # they run as their own step rather than being quietly skipped.
+      - run: pytest -m "slow and not llm" -q

@@ -44,6 +44,8 @@ dev = [
     "mypy>=1.11",
     "pandas-stubs",
     "types-PyYAML",
+    "types-openpyxl",
+    "formulas>=1.3",  # evaluates the workbook so its formulas can be tested, not assumed
     "pitchdeck-cfo[ocr]",
 ]
 
@@ -90,6 +92,7 @@ addopts = "-q --strict-markers"
 markers = [
     "smoke: end-to-end runs against real decks outside the repo; skipped when absent",
     "llm: requires a live Anthropic API key; skipped in CI",
+    "slow: compiles the workbook with a spreadsheet engine; seconds, not milliseconds",
 ]
 
 [tool.coverage.run]
