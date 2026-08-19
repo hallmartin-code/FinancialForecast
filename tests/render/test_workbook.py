@@ -1,10 +1,14 @@
-"""The workbook. Structure, formula-not-value, and -- the one that matters -- that
-the Excel formulas evaluate to the same numbers as the Python model.
+"""The workbook: structure, the colour convention, and -- the one that matters --
+that the Excel formulas reproduce the Python model.
 
-The model is implemented twice, once in `model/` and once in Excel formulas, and the
-whole value of the workbook rests on the two agreeing. `TestExcelAgreesWithPython`
-compiles the workbook with a spreadsheet engine and checks every P&L line and the
-cash balance. Those tests are marked `slow` because compiling takes a few seconds.
+The model exists twice, once in `model/` and once as Excel formulas, and the value of
+the workbook rests on the two agreeing. `TestExcelAgreesWithPython` compiles the
+generated file with a spreadsheet engine and checks it.
+
+Revenue, gross profit and EBITDA must agree to the dollar. Cash is allowed a few
+percent, because working capital and the loss carryforward depend on the path within
+a year and an annual grid cannot carry that. The tolerance is asserted rather than
+assumed, so a regression that widens it fails here.
 """
 
 from __future__ import annotations
@@ -16,12 +20,12 @@ import pytest
 from openpyxl import load_workbook
 
 from pitchdeck_cfo.model import build
+from pitchdeck_cfo.render import style as S
 from pitchdeck_cfo.render import workbook
 from tests import model_factories as mf
 
 ENGINES = ["saas", "hardware", "life_sciences"]
 
-# Deliberately non-trivial, so no assertion can pass because everything is zero.
 FULL = dict(
     cogs=mf.cogs(
         hosting_pct_of_revenue=mf.s(9.0),
@@ -90,107 +94,178 @@ def _model(engine: str) -> Any:
 
 @pytest.fixture(scope="module")
 def saas_book(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    out = tmp_path_factory.mktemp("wb") / "saas.xlsx"
-    return workbook.write(_model("saas"), out)
+    return workbook.write(_model("saas"), tmp_path_factory.mktemp("wb") / "saas.xlsx")
+
+
+def _rows(path: Path, sheet: str) -> dict[str, int]:
+    """Data rows by label.
+
+    Section bands share their label with the subtotal beneath them ("Total revenue"
+    heads a section *and* names a line), so only rows carrying a value in the first
+    year column count.
+    """
+    ws = load_workbook(path)[sheet]
+    found: dict[str, int] = {}
+    for r in range(1, ws.max_row + 1):
+        label = ws.cell(row=r, column=1).value
+        if isinstance(label, str) and ws.cell(row=r, column=2).value is not None:
+            found.setdefault(label, r)
+    return found
 
 
 class TestStructure:
-    def test_every_expected_tab_is_present_and_ordered(self, saas_book: Path) -> None:
+    def test_sheets_are_present_and_in_reading_order(self, saas_book: Path) -> None:
+        # Conclusion first, then the drivers, then the audit trail.
         assert load_workbook(saas_book).sheetnames == list(workbook.SHEETS)
 
-    def test_assumptions_become_defined_names(self, saas_book: Path) -> None:
-        # Formulas reference assumptions by name, which is what makes them readable.
-        names = set(load_workbook(saas_book).defined_names)
-        assert "revenue_arpu_annual" in names
-        assert "tax_blended_rate_pct" in names
-        assert len(names) > 40
+    def test_years_are_columns_not_months(self, saas_book: Path) -> None:
+        # Sixty columns is not a document anyone reads.
+        ws = load_workbook(saas_book)["P&L"]
+        assert ws.cell(row=S.YEAR_ROW, column=2).value == 2026
+        assert ws.cell(row=S.YEAR_ROW, column=6).value == 2030
+        assert ws.cell(row=S.YEAR_ROW, column=7).value is None
 
-    def test_month_and_year_headers_exist(self, saas_book: Path) -> None:
-        ws = load_workbook(saas_book)["PnL"]
-        assert ws.cell(row=3, column=3).value.startswith("20")
+    @pytest.mark.parametrize(
+        "sheet", ["Assumptions", "Revenue Build", "Headcount", "P&L", "Cash Flow"]
+    )
+    def test_every_sheet_carries_the_same_chrome(self, saas_book: Path, sheet: str) -> None:
+        ws = load_workbook(saas_book)[sheet]
+        assert str(ws.cell(row=1, column=1).fill.fgColor.rgb).endswith(S.TITLE_BG)
+        assert ws.cell(row=3, column=1).value == S.UNITS_NOTE
         assert ws.freeze_panes is not None
 
-    def test_the_readme_states_provenance_and_the_disclaimer(self, saas_book: Path) -> None:
-        text = "\n".join(str(c.value) for c in load_workbook(saas_book)["README"]["A"] if c.value)
+    def test_the_summary_states_provenance_and_the_disclaimer(self, saas_book: Path) -> None:
+        ws = load_workbook(saas_book)["Summary"]
+        text = "\n".join(str(c.value) for c in ws["A"] if c.value)
         assert "core inputs sourced from the deck" in text
-        assert "not audited financial information" in text
-        assert "Blue cells" in text
+        assert "Blue cells are inputs" in text
+        assert "Not audited financial information" in text
+        assert "annual restatement of a monthly model" in text
+
+    def test_sources_and_notes_accounts_for_the_inputs(self, saas_book: Path) -> None:
+        ws = load_workbook(saas_book)["Sources & Notes"]
+        headers = [ws.cell(row=5, column=c).value for c in range(1, 6)]
+        assert headers == ["Source", "Location", "Model use", "Confidence", "Notes"]
+        assert ws.cell(row=6, column=1).value
+
+
+class TestColourConvention:
+    """Colour carries meaning here, so it has to be right."""
+
+    def test_assumptions_are_blue_inputs(self, saas_book: Path) -> None:
+        ws = load_workbook(saas_book)["Assumptions"]
+        row = _rows(saas_book, "Assumptions")["A/R days"]
+        cell = ws.cell(row=row, column=2)
+        assert str(cell.font.color.rgb).endswith(S.BLUE)
+        assert isinstance(cell.value, int | float)
+
+    def test_cross_sheet_references_are_green(self, saas_book: Path) -> None:
+        ws = load_workbook(saas_book)["Headcount"]
+        row = _rows(saas_book, "Headcount")["Engineering"]
+        cell = ws.cell(row=row, column=2)
+        assert str(cell.font.color.rgb).endswith(S.GREEN)
+        assert str(cell.value).startswith("=Assumptions!")
+
+    def test_formulas_computed_here_are_black(self, saas_book: Path) -> None:
+        ws = load_workbook(saas_book)["P&L"]
+        row = _rows(saas_book, "P&L")["Gross profit"]
+        cell = ws.cell(row=row, column=2)
+        assert str(cell.font.color.rgb).endswith(S.BLACK)
+        assert str(cell.value).startswith("=")
+
+    def test_benchmark_inputs_are_flagged(self, tmp_path: Path) -> None:
+        """A benchmark is the company's missing number, so it is marked for replacing."""
+        model = build(
+            mf.assumptions(
+                "saas",
+                working_capital=mf.working_capital(dso_days=mf.s(45.0, "benchmark")),
+            )
+        )
+        path = workbook.write(model, tmp_path / "flagged.xlsx")
+        ws = load_workbook(path)["Assumptions"]
+        row = _rows(path, "Assumptions")["A/R days"]
+        assert ws.cell(row=row, column=2).fill.fill_type == "solid"
+        assert str(ws.cell(row=row, column=2).fill.fgColor.rgb).endswith(S.FLAG_FILL)
+
+    def test_a_deck_sourced_input_is_not_flagged(self, tmp_path: Path) -> None:
+        model = build(
+            mf.assumptions(
+                "saas",
+                working_capital=mf.working_capital(dso_days=mf.s(45.0, "deck")),
+            )
+        )
+        path = workbook.write(model, tmp_path / "clean.xlsx")
+        ws = load_workbook(path)["Assumptions"]
+        row = _rows(path, "Assumptions")["A/R days"]
+        assert ws.cell(row=row, column=2).fill.fill_type != "solid"
 
 
 class TestFormulasNotValues:
-    """A workbook of pasted numbers cannot be stress-tested, so it does not do the job."""
-
     @pytest.mark.parametrize(
         ("sheet", "label"),
         [
-            ("PnL", "Revenue"),
-            ("PnL", "Gross Profit"),
-            ("PnL", "EBITDA"),
-            ("PnL", "Net Income"),
-            ("Cashflow", "Ending Cash"),
-            ("COGS", "Total COGS"),
-            ("Opex", "Total operating expense"),
+            ("Revenue Build", "Total revenue"),
             ("Headcount", "Total headcount"),
+            ("P&L", "Gross profit"),
+            ("P&L", "EBITDA"),
+            ("P&L", "Net income"),
+            ("Cash Flow", "Ending cash"),
+            ("Summary", "Revenue"),
         ],
     )
     def test_key_lines_are_live_formulas(self, saas_book: Path, sheet: str, label: str) -> None:
         ws = load_workbook(saas_book)[sheet]
-        row = next(r for r in range(1, ws.max_row + 1) if ws.cell(row=r, column=1).value == label)
-        for column in (3, 20, 62):
+        row = _rows(saas_book, sheet)[label]
+        for column in (2, 4, 6):
             value = ws.cell(row=row, column=column).value
             assert isinstance(value, str) and value.startswith("="), (
                 f"{sheet}!{label} column {column} is a literal, not a formula"
             )
 
-    def test_assumption_values_are_literals(self, saas_book: Path) -> None:
-        # The inputs are the one place a number belongs. Everything else derives.
-        ws = load_workbook(saas_book)["Assumptions"]
-        row = next(
-            r
-            for r in range(5, ws.max_row + 1)
-            if ws.cell(row=r, column=1).value == "tax.blended_rate_pct"
-        )
-        assert ws.cell(row=row, column=2).value == 25.0
-
-    def test_inputs_are_blue_and_formulas_are_not(self, saas_book: Path) -> None:
-        # The convention a financial analyst reads without being told.
+    def test_only_assumptions_holds_typed_numbers(self, saas_book: Path) -> None:
+        """A hard-coded value elsewhere will not respond when an assumption changes."""
         wb = load_workbook(saas_book)
-        ws = wb["Assumptions"]
-        row = next(
-            r
-            for r in range(5, ws.max_row + 1)
-            if ws.cell(row=r, column=1).value == "tax.blended_rate_pct"
-        )
-        assert "0000CC" in str(ws.cell(row=row, column=2).font.color.rgb)
-
-        # A formula cell is anything but blue -- often no explicit colour at all.
-        pnl = wb["PnL"]
-        colour = pnl.cell(row=4, column=3).font.color
-        assert colour is None or "0000CC" not in str(colour.rgb)
-
-    def test_no_formula_references_a_missing_name(self, saas_book: Path) -> None:
-        wb = load_workbook(saas_book)
-        known = set(wb.defined_names)
-        import re
-
-        pattern = re.compile(r"\b([a-z][a-z0-9_]{4,})\b")
-        functions = {"if", "max", "min", "sum", "ceiling", "average", "sumproduct", "offset"}
-        for sheet in ("Revenue", "Headcount", "COGS", "Opex", "PnL", "Cashflow", "Metrics"):
+        for sheet in ("Revenue Build", "Headcount", "P&L", "Cash Flow"):
             ws = wb[sheet]
-            for row in ws.iter_rows():
+            for row in ws.iter_rows(min_row=S.YEAR_ROW + 1, min_col=2, max_col=6):
                 for cell in row:
-                    if not isinstance(cell.value, str) or not cell.value.startswith("="):
+                    if cell.value is None:
                         continue
-                    for token in pattern.findall(cell.value):
-                        if token in functions or token in known:
-                            continue
-                        raise AssertionError(
-                            f"{sheet}!{cell.coordinate} references unknown name {token!r}"
-                        )
+                    assert not isinstance(cell.value, int | float), (
+                        f"{sheet}!{cell.coordinate} is a typed number, not a formula"
+                    )
+
+    def test_divisions_are_guarded(self, saas_book: Path) -> None:
+        # A pre-revenue year divides by zero, and #DIV/0! reaching the Summary makes
+        # the whole model look broken.
+        ws = load_workbook(saas_book)["P&L"]
+        row = _rows(saas_book, "P&L")["Gross margin"]
+        assert "IFERROR" in str(ws.cell(row=row, column=2).value)
+
+    def test_costs_are_negative_so_subtotals_add(self, saas_book: Path) -> None:
+        ws = load_workbook(saas_book)["P&L"]
+        rows = _rows(saas_book, "P&L")
+        assert str(ws.cell(row=rows["Cost of revenue"], column=2).value).startswith("=-")
+        gross = str(ws.cell(row=rows["Gross profit"], column=2).value)
+        assert "+" in gross and "-" not in gross.replace("=", "")
 
 
-# --------------------------------------------------------------------------- #
-# the test that actually matters
+class TestNumberFormats:
+    def test_money_shows_red_parenthesised_negatives_and_a_dash_for_zero(
+        self, saas_book: Path
+    ) -> None:
+        ws = load_workbook(saas_book)["P&L"]
+        row = _rows(saas_book, "P&L")["EBITDA"]
+        assert ws.cell(row=row, column=2).number_format == S.MONEY
+        assert "[Red]" in S.MONEY
+        assert S.MONEY.endswith("-")
+
+    def test_percentages_use_a_percent_format(self, saas_book: Path) -> None:
+        ws = load_workbook(saas_book)["P&L"]
+        row = _rows(saas_book, "P&L")["Gross margin"]
+        assert ws.cell(row=row, column=2).number_format == S.PERCENT
+
+
 # --------------------------------------------------------------------------- #
 
 formulas = pytest.importorskip("formulas", reason="spreadsheet engine not installed")
@@ -207,91 +282,86 @@ def _evaluate(path: Path) -> Any:
     def value(sheet: str, cell: str) -> Any:
         import numpy as np
 
-        raw = np.asarray(solution[f"'[{path.name}]{sheet}'!{cell}"].value).ravel()[0]
+        # The engine uppercases sheet names in its keys.
+        raw = np.asarray(solution[f"'[{path.name}]{sheet.upper()}'!{cell}"].value).ravel()[0]
         return raw if isinstance(raw, str) else float(raw)
 
     return value
 
 
-def _annual_rows(path: Path, sheet: str = "PnL") -> dict[str, int]:
-    ws = load_workbook(path)[sheet]
-    rows: dict[str, int] = {}
-    seen = False
-    for r in range(1, ws.max_row + 1):
-        label = ws.cell(row=r, column=1).value
-        if label == "Annual roll-up":
-            seen = True
-            continue
-        if seen and isinstance(label, str):
-            rows.setdefault(label, r)
-    return rows
+COLUMNS = "BCDEF"
 
-
-PNL_LINES = [
-    "Revenue",
-    "COGS",
-    "Gross Profit",
-    "R&D",
-    "S&M",
-    "G&A",
-    "Total Opex",
-    "EBITDA",
-    "Depreciation",
-    "Tax",
-    "Net Income",
-]
+# Everything down to EBITDA is definitionally aggregable, so it must match to the
+# dollar. Below that the path within a year matters, and the tolerance is pinned so a
+# regression that widens it fails here rather than being discovered by a reader.
+EXACT = {"Total revenue": "Revenue", "Gross profit": "Gross Profit", "EBITDA": "EBITDA"}
+CASH_TOLERANCE = 0.05
 
 
 @pytest.mark.slow
 class TestExcelAgreesWithPython:
-    """The model is implemented twice. If the two disagree, the workbook is a lie."""
-
     @pytest.mark.parametrize("engine", ENGINES)
-    def test_every_pnl_line_matches(self, engine: str, tmp_path: Path) -> None:
+    @pytest.mark.parametrize("label", list(EXACT))
+    def test_lines_above_ebitda_match_exactly(
+        self, engine: str, label: str, tmp_path: Path
+    ) -> None:
         model = _model(engine)
         path = workbook.write(model, tmp_path / f"{engine}.xlsx")
         value = _evaluate(path)
-        rows = _annual_rows(path)
-
-        for line in PNL_LINES:
-            for i, column in enumerate("CDEFG"):
-                excel = value("PNL", f"{column}{rows[line]}")
-                assert not isinstance(excel, str), f"{line} Y{i + 1} evaluated to {excel!r}"
-                assert excel == pytest.approx(model.pnl_annual[line][i], abs=0.01), (
-                    f"{engine} {line} Y{i + 1}"
-                )
+        row = _rows(path, "P&L")[label]
+        for i, column in enumerate(COLUMNS):
+            excel = value("P&L", f"{column}{row}") * S.THOUSANDS
+            expected = model.pnl_annual[EXACT[label]][i]
+            assert excel == pytest.approx(expected, abs=1.0), f"{engine} {label} Y{i + 1}"
 
     @pytest.mark.parametrize("engine", ENGINES)
-    def test_ending_cash_matches(self, engine: str, tmp_path: Path) -> None:
+    def test_ending_cash_is_within_the_restatement_tolerance(
+        self, engine: str, tmp_path: Path
+    ) -> None:
         model = _model(engine)
         path = workbook.write(model, tmp_path / f"{engine}.xlsx")
         value = _evaluate(path)
-        ws = load_workbook(path)["Cashflow"]
-        row = [
-            r for r in range(1, ws.max_row + 1) if ws.cell(row=r, column=1).value == "Ending Cash"
-        ][-1]
-        for i, column in enumerate("CDEFG"):
-            assert value("CASHFLOW", f"{column}{row}") == pytest.approx(
-                model.ending_cash[i], abs=0.01
+        row = _rows(path, "Cash Flow")["Ending cash"]
+        for i, column in enumerate(COLUMNS):
+            excel = value("Cash Flow", f"{column}{row}") * S.THOUSANDS
+            expected = model.ending_cash[i]
+            assert abs(excel - expected) <= max(CASH_TOLERANCE * abs(expected), 30_000), (
+                f"{engine} ending cash Y{i + 1}: {excel:,.0f} vs {expected:,.0f}"
             )
+
+    @pytest.mark.parametrize("engine", ENGINES)
+    def test_no_cell_evaluates_to_an_error(self, engine: str, tmp_path: Path) -> None:
+        """A #VALUE! or #NAME? anywhere means a formula this tool wrote is malformed."""
+        model = _model(engine)
+        path = workbook.write(model, tmp_path / f"{engine}.xlsx")
+        value = _evaluate(path)
+        wb = load_workbook(path)
+        for sheet in ("Revenue Build", "Headcount", "P&L", "Cash Flow", "Summary"):
+            ws = wb[sheet]
+            for row in ws.iter_rows(min_row=S.YEAR_ROW + 1, min_col=2, max_col=6):
+                for cell in row:
+                    if not isinstance(cell.value, str) or not cell.value.startswith("="):
+                        continue
+                    result = value(sheet, cell.coordinate)
+                    assert not (isinstance(result, str) and result.startswith("#")), (
+                        f"{sheet}!{cell.coordinate} evaluated to {result}"
+                    )
 
     def test_changing_an_assumption_recalculates_the_model(self, tmp_path: Path) -> None:
         """The whole point of the workbook: it is a live model, not a screenshot."""
         model = _model("saas")
         path = workbook.write(model, tmp_path / "before.xlsx")
-        rows = _annual_rows(path)
-        before = _evaluate(path)("PNL", f"G{rows['Revenue']}")
+        row = _rows(path, "P&L")["Total revenue"]
+        before = _evaluate(path)("P&L", f"F{row}")
 
         wb = load_workbook(path)
         ws = wb["Assumptions"]
-        target = next(
-            r
-            for r in range(5, ws.max_row + 1)
-            if ws.cell(row=r, column=1).value == "revenue.net_revenue_retention_pct"
-        )
-        ws.cell(row=target, column=2, value=130.0)
+        target = _rows(path, "Assumptions")["Average paying customers"]
+        for i in range(len(COLUMNS)):
+            current = ws.cell(row=target, column=2 + i).value
+            ws.cell(row=target, column=2 + i, value=float(current) * 2)
         edited = tmp_path / "after.xlsx"
         wb.save(edited)
 
-        after = _evaluate(edited)("PNL", f"G{rows['Revenue']}")
-        assert after > before * 1.1, "raising NRR did not move Y5 revenue"
+        after = _evaluate(edited)("P&L", f"F{row}")
+        assert after == pytest.approx(before * 2, rel=0.01)

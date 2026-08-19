@@ -58,6 +58,8 @@ class FinancialModel(BaseModel):
     headcount_drivers: dict[str, str]
 
     revenue_components_annual: dict[str, tuple[float, ...]]
+    customers_annual: tuple[float, ...] = ()
+    """Average paying customers per year -- the base that actually earned the revenue."""
     cogs_components_annual: dict[str, tuple[float, ...]]
     opex_components_annual: dict[str, tuple[float, ...]]
 
@@ -245,6 +247,7 @@ def build(assumptions: ModelAssumptions) -> FinancialModel:
             name: _to_tuple(timeline.to_annual(series))
             for name, series in revenue_result.components.items()
         },
+        customers_annual=_to_tuple(timeline.average_of_year(revenue_result.ending_customers)),
         cogs_components_annual={
             name: _to_tuple(timeline.to_annual(series))
             for name, series in cogs_result.components.items()
