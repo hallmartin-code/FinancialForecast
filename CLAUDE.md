@@ -43,9 +43,13 @@ DeckDocument → DeckFacts → ModelAssumptions → FinancialModel → { PDF, XL
   and `as_prompt_text()` labels every page boundary so the model can only cite a
   location it was actually shown. PPTX speaker notes are preserved — founders hide
   real numbers there. A PDF yielding under 200 characters is treated as a scan.
-- `extract/` — two Claude passes (company profile, financial facts), each returning
-  strict JSON validated against the schema, retried once with the validation error fed
-  back. What the deck *claims* is captured separately from what we will *model*.
+- `extract/` — two Claude passes (company profile, financial facts) via
+  `messages.parse`, so the JSON schema is enforced server-side; retried once with the
+  validation error fed back. Every value carries a citation **and a verbatim quote**,
+  and `extract/grounding.py` checks each quote against the real text of the page it
+  names — which is what turns "cite your source" from an instruction into something
+  verifiable. What the deck *claims* (`deck_projections`) is captured separately from
+  anything this tool will model.
 - `assume/` — merges facts with a stage/sector benchmark pack into `ModelAssumptions`.
   User overrides from `assumptions.yaml` sit at the top of the precedence chain.
 - `model/` — pure functions, no I/O. Monthly internally, aggregated to fiscal years.
@@ -68,6 +72,10 @@ DeckDocument → DeckFacts → ModelAssumptions → FinancialModel → { PDF, XL
 | PDF table filtering | Keep tables with ≥2 rows, ≥2 cols and ≥50% non-empty cells | pdfplumber reports ruled *layout* as a table. Measured on the real deck: genuine financial tables score ~0.82 density, layout artifacts ~0.38. The filter drops two false positives and keeps the founder's 5-year P&L. |
 | PDF block `kind` | always `body` | A PDF carries no reliable structural semantics. The PPTX reader identifies titles from real placeholders; the PDF reader declines to guess rather than assert an invented structure. |
 | PPTX shape order | sorted by (top, left) | python-pptx yields shapes in z-order, which on a busy slide bears no relation to reading order. Group shapes are flattened recursively so nothing nested is dropped. |
+| Extraction call | `client.messages.parse(output_format=…)` + adaptive thinking | Schema enforced server-side. `budget_tokens` is rejected on this model generation; no assistant prefill, which is also rejected. The system prefix is cache-controlled since both passes reuse the same deck text. |
+| Numeric metrics as a list, not nullable fields | `stated: list[MetricFact]` + `not_stated: list[FinancialMetric]` | **The API caps a schema at 16 union-typed parameters.** Twenty-odd nullable metrics returned a 400. The list form uses no unions and gives a *stronger* guarantee: the model must name what it looked for and did not find, rather than merely omitting a key. A metric missing from both lists is folded into `not_stated` and recorded in `omitted_metrics` — the safe direction, surfaced rather than hidden. A duplicated metric raises, because two values for one metric is genuinely ambiguous. |
+| Quote grounding | verbatim quote required, checked against the deck | Whitespace is stripped entirely before comparison: PDF layout extraction splits words unpredictably (`"70-ye a r-old"`), and a check that tripped over that would report correct extractions as fabrications. Quotes under 12 chars are skipped as too generic to mean anything. |
+| Cache key | `sha256(deck) + prompt_version + model + pass_name` | A hit across a prompt or model change would silently mix two extractors' output in one run. Each pass is cached separately, so editing one prompt does not invalidate the other. |
 | Cache | `~/.cache/pitchdeck-cfo/<sha256(deck)+prompt_version+model>.json` | Iterating on rendering costs no API calls. `--no-cache` bypasses. |
 
 ## Layout
@@ -107,7 +115,7 @@ deselected in CI with `-m "not llm and not smoke"`.
 |---|---|---|
 | 0 | Scaffold, config, CLI skeleton, CI, fixtures | **done** |
 | 1 | Ingest layer | **done** |
-| 2 | Extraction schema, prompts, client, cache | |
+| 2 | Extraction schema, prompts, client, cache | **done** |
 | 3 | Assumption engine + benchmarks | |
 | 4 | Modelling engine + accounting-integrity tests | |
 | 5 | Excel workbook renderer | |

@@ -90,20 +90,27 @@ class DeckValue(Sourced[T], Generic[T]):
     source: Literal["deck"] = "deck"
 
 
+BusinessModelKind = Literal[
+    "life_sciences",  # pre-revenue, milestone- and licensing-driven
+    "saas",  # subscription cohort build
+    "marketplace",  # GMV x take rate
+    "transactional",  # active accounts x usage x unit price
+    "hardware",  # units x ASP, BOM-driven COGS
+    "services",
+    "unknown",
+]
+
+# Revenue engines implemented today. Anything else raises rather than being modelled
+# as if it were something it is not -- see errors.UnsupportedBusinessModelError.
+SUPPORTED_BUSINESS_MODELS: tuple[BusinessModelKind, ...] = ("life_sciences", "saas")
+
+
 class BusinessModel(BaseModel):
     """How the company makes money, which selects the revenue engine."""
 
     model_config = ConfigDict(frozen=True)
 
-    kind: Literal[
-        "life_sciences",  # pre-revenue, milestone- and licensing-driven
-        "saas",  # subscription cohort build
-        "marketplace",  # GMV x take rate
-        "transactional",  # active accounts x usage x unit price
-        "hardware",  # units x ASP, BOM-driven COGS
-        "services",
-        "unknown",
-    ]
+    kind: BusinessModelKind
     rationale: str
 
 

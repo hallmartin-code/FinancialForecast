@@ -13,6 +13,7 @@ from typing import Annotated
 import typer
 from rich.console import Console
 from rich.panel import Panel
+from rich.table import Table
 
 from pitchdeck_cfo import __version__
 from pitchdeck_cfo.config import MAX_YEARS, MIN_YEARS, Effort, load_settings
@@ -140,7 +141,7 @@ def build(
         load_settings(model=model, effort=effort, years=years)
     except PitchdeckCFOError as exc:
         _fail(exc)
-    raise NotImplementedError("build pipeline lands in phase 7; phases 1-6 build its stages")
+    raise NotImplementedError("build pipeline lands in phase 7; phases 3-6 build its stages")
 
 
 @app.command()
@@ -157,12 +158,65 @@ def extract(
     verbose: VerboseOpt = False,
 ) -> None:
     """Run the extraction passes only and show what the deck actually states."""
+    from pitchdeck_cfo.extract import default_cache, extract_facts
+    from pitchdeck_cfo.ingest import load_deck
+
     try:
         _validate_deck_path(deck)
-        load_settings(model=model, effort=effort)
+        settings = load_settings(model=model, effort=effort)
+
+        with console.status("[dim]reading deck[/dim]", spinner="dots") as status:
+            document = load_deck(deck, ocr=ocr, min_text_chars=settings.min_text_chars)
+            status.update(f"[dim]{document.summary()}[/dim]")
+
+            def progress(message: str) -> None:
+                status.update(f"[dim]{message}[/dim]")
+
+            facts = extract_facts(
+                document,
+                settings=settings,
+                cache=default_cache(settings, enabled=not no_cache),
+                progress=progress,
+            )
     except PitchdeckCFOError as exc:
         _fail(exc)
-    raise NotImplementedError("extraction lands in phase 2")
+
+    payload = facts.model_dump_json(indent=2)
+    if json_out is not None:
+        json_out.parent.mkdir(parents=True, exist_ok=True)
+        json_out.write_text(payload, encoding="utf-8")
+        console.print(f"[green]wrote[/green] {json_out}")
+    else:
+        console.print_json(payload)
+
+    if verbose or facts.grounding_warnings:
+        _report_grounding(facts)
+
+
+def _report_grounding(facts: object) -> None:
+    """Show any quote that could not be found where the model said it was."""
+    warnings = getattr(facts, "grounding_warnings", ())
+    if not warnings:
+        console.print("[green]grounding: every quote was found on the page it cited.[/green]")
+        return
+
+    table = Table(
+        title="Quotes that could not be confirmed",
+        title_style="yellow",
+        header_style="dim",
+    )
+    table.add_column("field")
+    table.add_column("cited")
+    table.add_column("problem")
+    table.add_column("quote", overflow="fold", max_width=48)
+    for warning in warnings:
+        table.add_row(
+            warning.field_path,
+            warning.citation,
+            warning.reason.replace("_", " "),
+            warning.quote,
+        )
+    err_console.print(table)
 
 
 @app.command(name="init-assumptions")
