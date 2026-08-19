@@ -1,0 +1,11 @@
+# Source stays LF in the repo regardless of platform.
+* text=auto eol=lf
+
+# Deck fixtures and generated artifacts are binary. Without these, git's text
+# heuristic mangles the PDF fixture with CRLF conversion on checkout.
+*.pdf   binary
+*.pptx  binary
+*.xlsx  binary
+*.docx  binary
+*.png   binary
+*.jpg   binary
