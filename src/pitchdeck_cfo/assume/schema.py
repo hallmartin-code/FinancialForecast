@@ -75,6 +75,8 @@ class SaaSRevenue(BaseModel):
 
     new_logos_month_1: Sourced[float]
     new_logo_growth_monthly_pct: Sourced[float]
+    growth_decay_annual_pct: Sourced[float]
+    terminal_growth_monthly_pct: Sourced[float]
 
     logo_churn_annual_pct: Sourced[float]
     net_revenue_retention_pct: Sourced[float]
@@ -125,6 +127,8 @@ class HardwareRevenue(BaseModel):
     device_asp: Money
     units_month_1: Sourced[float]
     unit_growth_monthly_pct: Sourced[float]
+    growth_decay_annual_pct: Sourced[float]
+    terminal_growth_monthly_pct: Sourced[float]
 
     consumable_price: Money
     consumables_per_device_per_year: Sourced[float]
@@ -160,7 +164,7 @@ class COGSAssumptions(BaseModel):
 
     # Hardware-shaped
     bom_pct_of_asp: Sourced[float]
-    consumable_cogs_pct: Sourced[float]
+    consumable_gross_margin_pct: Sourced[float]
     warranty_pct_of_revenue: Sourced[float]
 
     target_gross_margin_pct: Sourced[float] = Field(
@@ -186,9 +190,22 @@ class HeadcountAssumptions(BaseModel):
     # Customer success hiring derives from the account count.
     accounts_per_csm: Sourced[float]
 
-    # Engineering hiring derives from the product roadmap.
+    # Engineering hiring derives from the product roadmap and the revenue plan.
     engineers_per_product_line: Sourced[float]
     product_lines: Sourced[float]
+    revenue_per_engineer: Money
+
+    # Support functions scale off the teams they support.
+    sales_per_marketing_hire: Sourced[float]
+    ftes_per_ga_hire: Sourced[float]
+
+    scale_exponent: Sourced[float] = Field(
+        description=(
+            "Headcount grows with revenue^exponent. Below 1.0 this is where operating "
+            "leverage comes from; at 1.0 the company never gets any, which is the "
+            "correct output for a plan that hires linearly with revenue."
+        )
+    )
 
 
 class OpexAssumptions(BaseModel):

@@ -147,6 +147,40 @@ COMMON: dict[str, BenchmarkValue] = {
     "inventory_days": _convention(
         0, "days", "No inventory for a company that does not ship a physical good"
     ),
+    "revenue_per_engineer_usd": _convention(
+        400_000,
+        "USD/yr",
+        "Revenue per engineer at scale",
+        note="Used to trigger engineering hiring against the revenue plan rather than "
+        "assuming a headcount curve.",
+    ),
+    "ftes_per_ga_hire": _convention(12, "FTE", "Company headcount supported by one G&A hire"),
+    "sales_per_marketing_hire": _convention(
+        3, "FTE", "Sales headcount supported by one marketing hire"
+    ),
+    "growth_decay_annual_pct": _convention(
+        30,
+        "% of the rate, per year",
+        "Growth-rate decay",
+        note="No company holds its current growth rate for five years. The monthly "
+        "rate decays by this fraction each year toward the floor below. Set it to 0 "
+        "to extrapolate the deck's rate flat, which is what an un-decayed model does "
+        "and why those models are not believed.",
+    ),
+    "terminal_growth_monthly_pct": _convention(
+        1.5,
+        "%/month",
+        "Terminal monthly growth floor",
+        note="Roughly 20% a year, the rate a scaled business sustains.",
+    ),
+    "headcount_scale_exponent": _convention(
+        0.75,
+        "exponent",
+        "Sub-linear headcount scaling",
+        note="Headcount grows with revenue^0.75, which is where operating leverage "
+        "comes from. At 1.0 the company never gets leverage and never reaches "
+        "profitability -- which is the correct output for a plan that hires linearly.",
+    ),
 }
 
 # --------------------------------------------------------------------------- #

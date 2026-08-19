@@ -326,6 +326,12 @@ def _saas_revenue(facts: DeckFacts, r: Resolver) -> SaaSRevenue:
             benchmark="new_logos_month_1",
         ),
         new_logo_growth_monthly_pct=monthly_growth,
+        growth_decay_annual_pct=r.pick(
+            "growth_decay_annual_pct", benchmark="growth_decay_annual_pct"
+        ),
+        terminal_growth_monthly_pct=r.pick(
+            "terminal_growth_monthly_pct", benchmark="terminal_growth_monthly_pct"
+        ),
         logo_churn_annual_pct=r.pick(
             "logo_churn_annual_pct",
             deck=_metric(facts, "logo_churn_pct"),
@@ -412,6 +418,12 @@ def _hardware_revenue(facts: DeckFacts, r: Resolver) -> HardwareRevenue:
                 else None
             ),
             benchmark="unit_growth_monthly_pct",
+        ),
+        growth_decay_annual_pct=r.pick(
+            "growth_decay_annual_pct", benchmark="growth_decay_annual_pct"
+        ),
+        terminal_growth_monthly_pct=r.pick(
+            "terminal_growth_monthly_pct", benchmark="terminal_growth_monthly_pct"
         ),
         consumable_price=r.pick(
             "consumable_price",
@@ -502,7 +514,9 @@ def resolve(
         ),
         revenue=revenue,
         cogs=_cogs(facts, r, business_model),
-        headcount=_headcount(r, headcount_start, starting_headcount, loaded_multiplier),
+        headcount=_headcount(
+            r, headcount_start, starting_headcount, loaded_multiplier, business_model
+        ),
         opex=_opex(r, business_model),
         working_capital=_working_capital(r),
         financing=_financing(facts, r),
@@ -534,8 +548,8 @@ def _cogs(facts: DeckFacts, r: Resolver, business_model: BusinessModelKind) -> C
         bom_pct_of_asp=r.pick(
             "bom_pct_of_asp", benchmark="bom_pct_of_asp", fallback=(0.0, "no physical product")
         ),
-        consumable_cogs_pct=r.pick(
-            "consumable_cogs_pct",
+        consumable_gross_margin_pct=r.pick(
+            "consumable_gross_margin_pct",
             benchmark="consumable_gross_margin_pct",
             fallback=(0.0, "no consumable stream"),
         ),
@@ -558,6 +572,7 @@ def _headcount(
     stated: dict[str, float],
     starting_total: Sourced[float],
     loaded_multiplier: float | None,
+    business_model: BusinessModelKind = "saas",
 ) -> HeadcountAssumptions:
     functions: tuple[Function, ...] = (
         "Engineering",
@@ -587,9 +602,17 @@ def _headcount(
                 note="deck names no one in this function",
             )
     if not stated:
-        # Everything the deck gave us is a single total; place it in G&A rather than
-        # inventing a functional split the deck never stated.
-        starting["G&A"] = starting_total
+        # The deck gave a headcount total with no functional split. Placing it in the
+        # function the business actually runs on beats inventing a split -- and beats
+        # the previous behaviour of parking a preclinical team in G&A, which made a
+        # research company look like an admin one.
+        core_by_model: dict[BusinessModelKind, Function] = {
+            "life_sciences": "Research",
+            "saas": "Engineering",
+            "hardware": "Engineering",
+        }
+        core: Function = core_by_model.get(business_model, "G&A")
+        starting[core] = starting_total
 
     return HeadcountAssumptions(
         starting=starting,
@@ -623,6 +646,12 @@ def _headcount(
             fallback=(6.0, "standard team size"),
         ),
         product_lines=r.pick("product_lines", benchmark="product_lines"),
+        revenue_per_engineer=r.pick("revenue_per_engineer", benchmark="revenue_per_engineer_usd"),
+        sales_per_marketing_hire=r.pick(
+            "sales_per_marketing_hire", benchmark="sales_per_marketing_hire"
+        ),
+        ftes_per_ga_hire=r.pick("ftes_per_ga_hire", benchmark="ftes_per_ga_hire"),
+        scale_exponent=r.pick("headcount_scale_exponent", benchmark="headcount_scale_exponent"),
     )
 
 

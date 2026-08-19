@@ -55,7 +55,10 @@ DeckDocument → DeckFacts → ModelAssumptions → FinancialModel → { PDF, XL
   passing through it, and it records the provenance it settled on — so the coverage
   ratio is a fact about what happened, not a separate tally that could drift. User
   overrides from `assumptions.yaml` sit at the top of the precedence chain.
-- `model/` — pure functions, no I/O. Monthly internally, aggregated to fiscal years.
+- `model/` — pure functions, no I/O. Monthly internally because break-even, peak cash
+  need and runway are month-level facts an annual model cannot state. `build()` runs
+  `check_integrity` and **raises** rather than returning a statement that does not
+  reconcile.
 - `render/` — the workbook is the source of truth; the PDF is its executive rendering.
   Both are produced from one `FinancialModel`, so they cannot disagree.
 
@@ -85,6 +88,12 @@ DeckDocument → DeckFacts → ModelAssumptions → FinancialModel → { PDF, XL
 | `CORE_INPUTS` per business model | 8–12 named drivers, not every assumption | Coverage measures the inputs that *move* the model. A run can carry thirty benchmark values for rent-per-desk and still be a good model; it cannot if it invented the revenue base. |
 | Growth compounding | `(1+annual)^(1/12) − 1` | 118% annual growth is 6.7%/month, not 9.8%. Dividing by twelve overstates a five-year plan badly. |
 | Burn derivation | cash + raise ÷ stated runway | A deck saying "$4M buys 18 months" has stated its burn without using the word. Deriving beats reaching for a benchmark. |
+| Growth decays | rate falls 30%/yr toward a 1.5%/month floor | Flat extrapolation of a deck's current rate is the single least believable thing a five-year model can do: 118%/yr held for five years is 49×. Set the decay to 0 to get flat extrapolation back. |
+| Headcount scales at revenue^0.75 | not linearly | This is where operating leverage comes from. At exponent 1.0 R&D stays a fixed share of revenue forever and the company never reaches profitability — which is the honest output for a plan that really does hire linearly. Meridian's EBITDA went from never-positive to month 19 on this change alone. |
+| Margin expansion is an output | sub-linear hosting curve (`revenue^0.85`) | Most models assert margin improving from 65% to 80%. Here the cost curve produces it; set the exponent to 1.0 and the expansion disappears. |
+| Accounting ties use **absolute** dollar tolerance | `atol=$1, rtol=0` | numpy's default `rtol=1e-5` sounds strict and is not: on a $30M cash balance it silently accepts a $300 discrepancy, and the error it tolerates grows with the company. Caught by a test that deliberately broke a tie. |
+| Non-finite guard | `check_integrity` names any NaN line | A NaN compares unequal to everything including itself, so it surfaces as some unrelated tie failure with a misleading message. Found via a zero-valued G&A ratio dividing by zero. |
+| Metrics are computed, never restated | from the model's own spend and wins | The deck's CAC is a claim; a CAC computed from the S&M the model actually spends is a result, and the two disagreeing is itself information. Every metric returns `None` where undefined rather than 0 or infinity. |
 | Cache | `~/.cache/pitchdeck-cfo/<sha256(deck)+prompt_version+model>.json` | Iterating on rendering costs no API calls. `--no-cache` bypasses. |
 
 ## Layout
@@ -97,9 +106,11 @@ tests/
   unit/  integrity/  golden/  render/  fixtures/decks/
 ```
 
-`model/` adds a `pnl.py` beyond the original brief: the P&L roll-up plus the
-D&A / interest / NOL-carryforward tax reconciliation is enough logic to own a module
-rather than hide inside `cashflow.py`.
+`model/` adds two modules beyond the original brief. `pnl.py` holds the P&L roll-up
+plus the D&A / interest / NOL-carryforward reconciliation, which is enough logic to
+own a module rather than hide inside `cashflow.py`. `timeline.py` holds the calendar
+and the rate conversions, because flows-sum-but-balances-do-not is a distinction every
+other module depends on getting right.
 
 ## Running things
 
@@ -126,7 +137,7 @@ deselected in CI with `-m "not llm and not smoke"`.
 | 1 | Ingest layer | **done** |
 | 2 | Extraction schema, prompts, client, cache | **done** |
 | 3 | Assumption engine + benchmarks | **done** |
-| 4 | Modelling engine + accounting-integrity tests | |
+| 4 | Modelling engine + accounting-integrity tests | **done** |
 | 5 | Excel workbook renderer | |
 | 6 | One-pager PDF renderer + charts | |
 | 7 | Polish: caching, `--strict`, README | |
