@@ -1,7 +1,10 @@
 # Railway builds from this file (Nixpacks detects it). Local development uses
 # `pip install -e .[dev]` against pyproject.toml instead. Keep these pins in step
 # with the `dependencies` list in pyproject.toml.
-anthropic>=0.40
+# Capped below 1.0: anthropic 1.x depends on httpx2 rather than httpx, and a fresh
+# resolve here silently installed it -- which is what broke every deploy after the
+# Resend commit. Production must run the major the tests actually exercise.
+anthropic>=0.40,<1
 pydantic>=2
 pydantic-settings>=2
 typer>=0.12
@@ -16,6 +19,7 @@ matplotlib>=3.8
 openpyxl>=3.1
 PyYAML>=6
 python-dotenv>=1.0
+httpx>=0.27,<1  # notify.py imports it directly; never rely on it arriving transitively
 
 # The package itself, so `import pitchdeck_cfo` resolves from src/.
 -e .
