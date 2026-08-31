@@ -8,6 +8,7 @@ decks do not outlive their job.
 from __future__ import annotations
 
 import importlib
+import re
 import shutil
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -371,14 +372,38 @@ class TestBrandAssets:
     def test_the_head_references_every_size_a_browser_looks_for(self, client: TestClient) -> None:
         page = client.get("/").text
         for reference in (
-            'href="/favicon.ico"',
-            'href="/static/favicon-32.png"',
-            'href="/static/favicon-16.png"',
+            'href="/favicon.ico?v=',
+            'href="/static/favicon-32.png?v=',
+            'href="/static/favicon-16.png?v=',
             'rel="apple-touch-icon"',
             'rel="manifest"',
             'name="theme-color"',
         ):
             assert reference in page, f"the document head is missing {reference}"
+
+    def test_every_icon_url_is_versioned(self, client: TestClient) -> None:
+        """Browsers cache favicons -- and the absence of one -- past any normal reload.
+
+        Chrome keeps them in a store of their own that a hard refresh does not touch,
+        so an origin first visited without an icon can show a blank tab indefinitely.
+        A versioned URL is a different resource, which is what actually breaks that.
+        """
+        page = client.get("/").text
+        versions = set(re.findall(r'href="/(?:static/)?[\w.-]+\?v=([a-f0-9]{8})"', page))
+        assert len(versions) == 1, f"icon URLs disagree on the version: {versions}"
+        assert "{{V}}" not in page, "the version placeholder was left unsubstituted"
+
+    def test_the_version_tracks_the_icon_contents(self, web: Any) -> None:
+        # Reissuing the mark must change the URL, or nobody will see the new one.
+        import hashlib
+
+        digest = hashlib.sha256((web.STATIC_DIR / "favicon.ico").read_bytes()).hexdigest()
+        assert digest[:8] == web.ASSET_VERSION
+
+    def test_a_versioned_request_still_serves_the_icon(self, client: TestClient, web: Any) -> None:
+        response = client.get(f"/favicon.ico?v={web.ASSET_VERSION}")
+        assert response.status_code == 200
+        assert response.content[:4] == bytes([0, 0, 1, 0]), "not a well-formed ICO"
 
     def test_the_manifest_describes_the_installed_app(self, client: TestClient) -> None:
         manifest = client.get("/site.webmanifest").json()

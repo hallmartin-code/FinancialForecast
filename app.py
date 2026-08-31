@@ -12,6 +12,7 @@ says so rather than letting you find out from a bill.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import os
 import secrets
@@ -48,6 +49,24 @@ APP_PASSWORD = os.environ.get("APP_PASSWORD")
 
 WEB_DIR = Path(__file__).parent / "web"
 STATIC_DIR = WEB_DIR / "static"
+
+
+def _asset_version() -> str:
+    """A short hash of the icon, appended to every icon URL.
+
+    Browsers cache favicons in a store of their own that survives an ordinary reload,
+    a hard refresh, and often a cache clear -- and they cache the *absence* of one
+    just as happily. Any origin visited before the icon existed will keep showing a
+    blank tab indefinitely. Versioning the URL makes it a different resource, which
+    is the only reliable way to make a favicon change actually appear.
+    """
+    icon = STATIC_DIR / "favicon.ico"
+    if not icon.exists():
+        return MODEL_VERSION
+    return hashlib.sha256(icon.read_bytes()).hexdigest()[:8]
+
+
+ASSET_VERSION = _asset_version()
 
 app = FastAPI(title="pitchdeck-cfo", docs_url=None, redoc_url=None)
 security = HTTPBasic(auto_error=False)
@@ -299,7 +318,8 @@ async def index(_: None = Depends(require_auth)) -> HTMLResponse:
         "spend the API key it runs on. Set APP_PASSWORD to close it."
     )
     return HTMLResponse(
-        html.replace("{{DISCLOSURE}}", disclosure)
+        html.replace("{{V}}", ASSET_VERSION)
+        .replace("{{DISCLOSURE}}", disclosure)
         .replace("{{DELIVERY}}", _delivery_note())
         .replace("{{VERSION}}", MODEL_VERSION)
         .replace("{{MAX_MB}}", str(MAX_UPLOAD_MB))
