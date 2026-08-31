@@ -19,6 +19,7 @@ from pitchdeck_cfo.errors import InsufficientCoverageError
 from pitchdeck_cfo.extract import DeckFacts, default_cache, extract_facts
 from pitchdeck_cfo.ingest import load_deck
 from pitchdeck_cfo.model import FinancialModel, build
+from pitchdeck_cfo.notify import Delivery, send
 from pitchdeck_cfo.render import onepager, workbook
 
 ProgressFn = Callable[[str], None]
@@ -41,6 +42,8 @@ class BuildResult:
     model: FinancialModel
     onepager_path: Path
     workbook_path: Path
+    delivery: Delivery | None = None
+    """What happened to the email, when one was configured."""
 
     @property
     def coverage_line(self) -> str:
@@ -56,6 +59,7 @@ def run(
     strict: bool = False,
     ocr: bool = False,
     use_cache: bool = True,
+    email: bool = True,
     progress: ProgressFn = _noop,
 ) -> BuildResult:
     """Deck in, two artifacts out.
@@ -94,10 +98,18 @@ def run(
     progress("writing the one-pager")
     onepager_path = onepager.write(model, out_dir / f"{name}_financial_onepager.pdf")
 
+    # Emailed last, and only once both files exist. A mail failure must never cost
+    # anyone a model that was already built, so `send` reports rather than raises.
+    delivery = None
+    if email and settings.email_enabled:
+        progress("emailing the results")
+        delivery = send(model, [onepager_path, workbook_path], settings=settings)
+
     return BuildResult(
         facts=facts,
         assumptions=assumptions,
         model=model,
         onepager_path=onepager_path,
         workbook_path=workbook_path,
+        delivery=delivery,
     )

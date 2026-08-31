@@ -131,6 +131,10 @@ def build(
             help="Refuse to emit a model whose core inputs are mostly benchmarks.",
         ),
     ] = False,
+    no_email: Annotated[
+        bool,
+        typer.Option("--no-email", help="Do not email the results, even if email is configured."),
+    ] = False,
     model: ModelOpt = None,
     effort: EffortOpt = None,
     ocr: OCROpt = False,
@@ -153,6 +157,7 @@ def build(
                 strict=strict,
                 ocr=ocr,
                 use_cache=not no_cache,
+                email=not no_email,
                 progress=lambda message: status.update(f"[dim]{message}[/dim]"),
             )
     except PitchdeckCFOError as exc:
@@ -173,6 +178,11 @@ def build(
 
     for label, value in result.model.break_even.items():
         console.print(f"  [dim]{label}:[/dim] {value}")
+
+    if result.delivery is not None:
+        style = "green" if result.delivery.sent else "yellow"
+        verb = "emailed" if result.delivery.sent else "not emailed"
+        console.print(f"[{style}]{verb}[/{style}] {result.delivery.detail}")
 
     if verbose:
         _report_grounding(result.facts)

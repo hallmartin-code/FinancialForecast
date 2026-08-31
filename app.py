@@ -100,6 +100,7 @@ class Job:
     warnings: int = 0
     observations: list[str] = field(default_factory=list)
     deck_gap: dict[str, Any] | None = None
+    delivery: dict[str, Any] | None = None
     error: str | None = None
     remedy: str | None = None
     onepager: Path | None = None
@@ -120,6 +121,7 @@ class Job:
             "warnings": self.warnings,
             "observations": self.observations,
             "deck_gap": self.deck_gap,
+            "delivery": self.delivery,
             "error": self.error,
             "remedy": self.remedy,
             "onepager_url": f"/download/{self.id}/onepager" if self.onepager else None,
@@ -201,6 +203,9 @@ async def _run_job(job: Job, deck: Path, out_dir: Path, years: int, strict: bool
                     "ratio": round(ratio, 1),
                 }
 
+        if result.delivery is not None:
+            job.delivery = {"sent": result.delivery.sent, "detail": result.delivery.detail}
+
         job.onepager = result.onepager_path
         job.workbook = result.workbook_path
         job.status = "done"
@@ -224,6 +229,22 @@ async def healthz() -> dict[str, Any]:
     }
 
 
+def _delivery_note() -> str:
+    """What happens to a build after it is made.
+
+    Derived from configuration rather than written by hand. Someone uploading a
+    confidential deck is entitled to know it will be forwarded, and the page must not
+    be able to drift out of step with whether it actually is.
+    """
+    settings = load_settings()
+    if not settings.email_enabled:
+        return "Results are not emailed anywhere."
+    return (
+        f"A copy of every completed model, with both documents attached, is emailed "
+        f"to {settings.email_to}."
+    )
+
+
 @app.get("/", response_class=HTMLResponse)
 async def index(_: None = Depends(require_auth)) -> HTMLResponse:
     html = (WEB_DIR / "index.html").read_text(encoding="utf-8")
@@ -236,6 +257,7 @@ async def index(_: None = Depends(require_auth)) -> HTMLResponse:
     )
     return HTMLResponse(
         html.replace("{{DISCLOSURE}}", disclosure)
+        .replace("{{DELIVERY}}", _delivery_note())
         .replace("{{VERSION}}", MODEL_VERSION)
         .replace("{{MAX_MB}}", str(MAX_UPLOAD_MB))
         .replace("{{TTL}}", str(JOB_TTL_MINUTES))

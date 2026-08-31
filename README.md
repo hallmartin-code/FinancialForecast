@@ -53,6 +53,9 @@ the web build and the command-line build cannot drift apart.
    | `APP_PASSWORD` | strongly recommended | Without it the service is open and anyone with the URL can spend your key. |
    | `APP_USERNAME` | no | Defaults to `ten`. |
    | `PDCFO_MODEL` | no | Defaults to `claude-opus-5`. |
+   | `RESEND_API_KEY` | no | Set it and every completed build is emailed with both documents attached. Unset, nothing is sent. |
+   | `EMAIL_TO` | no | Defaults to `Info@tencapital.group`. Comma-separated for several recipients. |
+   | `EMAIL_FROM` | no | Must be on a domain verified in Resend. Defaults to `pitchdeck-cfo@tencapital.group`. |
    | `MAX_UPLOAD_MB` | no | Defaults to 40. |
    | `JOB_TTL_MINUTES` | no | Uploaded decks and artifacts are deleted after this; defaults to 120. |
    | `MAX_CONCURRENT_JOBS` | no | Defaults to 2. Each build costs money. |
@@ -73,5 +76,12 @@ Run it locally the same way:
   rather than a wrong answer.
 - **Uploaded decks are confidential** and are deleted on a timer (`JOB_TTL_MINUTES`).
   Jobs live in memory, so a restart clears them.
+- **Email is off unless configured, and the page says which.** With `RESEND_API_KEY`
+  set, the upload page tells visitors their results will be emailed and names the
+  recipient; without it, the page says nothing is emailed. That disclosure is derived
+  from configuration, so it cannot drift out of step with what the service does.
+- **A failed email never fails a build.** Both documents are already written and
+  downloadable by the time delivery is attempted; a delivery failure is reported on
+  the page and in the CLI, and nothing is lost.
 - **Railway's filesystem is ephemeral.** Artifacts are meant to be downloaded, not
   stored; nothing here is a system of record.

@@ -58,6 +58,18 @@ def _deck(name: str = "deck.pptx", payload: bytes = b"x" * 500) -> dict[str, Any
     return {"deck": (name, payload)}
 
 
+def _settings_with_email() -> Any:
+    from pitchdeck_cfo.config import load_settings
+
+    return load_settings(resend_api_key="re_test", email_to="Info@tencapital.group")
+
+
+def _settings_without_email() -> Any:
+    from pitchdeck_cfo.config import Settings
+
+    return Settings(resend_api_key=None, email_to="")
+
+
 def _finish(client: TestClient, job_id: str) -> dict[str, Any]:
     """TestClient runs background tasks synchronously, so one poll is enough."""
     response = client.get(f"/status/{job_id}")
@@ -219,10 +231,10 @@ class TestRetention:
 class TestPageContract:
     """The page states what the service does. Wrong claims here are the failure mode.
 
-    The design this page was built from carried a line promising that a copy of every
-    generated document is emailed to a named address. That is true of a different
-    tool. This app emails nobody, and a page that said otherwise would be lying to
-    whoever uploads a confidential deck.
+    This originally asserted the page promised no email, because the app sent none.
+    It now sends one, so the invariant is not "says nothing about email" but "says
+    whatever is true of this deployment" -- derived from configuration, so the page
+    cannot drift out of step with what actually happens to an uploaded deck.
     """
 
     def test_no_placeholder_survives_into_the_response(self, client: TestClient) -> None:
@@ -230,10 +242,22 @@ class TestPageContract:
         for token in ("{{DISCLOSURE}}", "{{VERSION}}", "{{MAX_MB}}", "{{TTL}}"):
             assert token not in page, f"{token} was not substituted"
 
-    def test_the_page_makes_no_claim_about_emailing_anyone(self, client: TestClient) -> None:
-        page = client.get("/").text.lower()
-        for claim in ("gmail.com", "emailed to", "we email", "sent to your inbox"):
-            assert claim not in page, f"the page claims {claim!r}, which this app does not do"
+    def test_the_page_says_nothing_is_emailed_when_email_is_off(
+        self, client: TestClient, web: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("RESEND_API_KEY", raising=False)
+        monkeypatch.setattr(web, "load_settings", lambda **kw: _settings_without_email())
+        page = client.get("/").text
+        assert "Results are not emailed anywhere." in page
+        assert "emailed to" not in page
+
+    def test_the_page_names_the_recipient_when_email_is_on(
+        self, client: TestClient, web: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Someone uploading a confidential deck is entitled to know it is forwarded."""
+        monkeypatch.setattr(web, "load_settings", lambda **kw: _settings_with_email())
+        page = client.get("/").text
+        assert "emailed to Info@tencapital.group" in page
 
     def test_only_the_supported_formats_are_offered(self, client: TestClient) -> None:
         # Offering .docx would invite an upload the pipeline refuses.
@@ -249,7 +273,8 @@ class TestPageContract:
     def test_the_retention_window_shown_matches_the_sweep(
         self, client: TestClient, web: Any
     ) -> None:
-        assert f"deleted after {web.JOB_TTL_MINUTES} minutes" in client.get("/").text
+        page = " ".join(client.get("/").text.split())
+        assert f"deleted from this server after {web.JOB_TTL_MINUTES} minutes" in page
 
     def test_the_page_is_well_formed(self, client: TestClient) -> None:
         from html.parser import HTMLParser

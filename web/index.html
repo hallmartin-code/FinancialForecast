@@ -349,6 +349,7 @@
     </form>
 
     <div class="disclosure" id="disclosure">{{DISCLOSURE}}</div>
+    <div class="disclosure" style="border-top:none;padding-top:8px;margin-top:0">{{DELIVERY}}</div>
   </div>
 
   <!-- progress -->
@@ -378,6 +379,7 @@ const STAGES = [
   ["one-pager",           "Writing the one-pager"],
 ];
 
+const DELIVERY = "{{DELIVERY}}";
 const $ = id => document.getElementById(id);
 const form = $("form"), go = $("go"), input = $("deck-upload"), dz = $("dropzone");
 const uploadCard = $("upload-card"), progressCard = $("progress-card"), resultCard = $("result-card");
@@ -543,9 +545,12 @@ function succeed(job) {
       <a class="btn ghost" href="${job.workbook_url}">Download model (XLSX)</a>
     </div>
     <div class="disclosure">
-      Uploaded decks and generated files are deleted after {{TTL}} minutes. Benchmark-supplied
-      values are marked in both documents, so you can see which parts of the model the
-      company did not give you.
+      ${esc(DELIVERY)} Uploaded decks and generated files are deleted from this server after
+      {{TTL}} minutes. Benchmark-supplied values are marked in both documents, so you can
+      see which parts of the model the company did not give you.
+      ${job.delivery && !job.delivery.sent
+        ? `<br><span style="color:var(--coral-soft)">The email did not go out: ${esc(job.delivery.detail)}</span>`
+        : ""}
     </div>`);
 }
 </script>
