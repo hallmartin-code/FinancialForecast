@@ -405,6 +405,12 @@ class TestBrandAssets:
         assert response.status_code == 200
         assert response.content[:4] == bytes([0, 0, 1, 0]), "not a well-formed ICO"
 
+    def test_health_reports_the_build_it_is_running(self, client: TestClient, web: Any) -> None:
+        """A stale deploy is otherwise invisible: correct repo, wrong running code."""
+        body = client.get("/healthz").json()
+        assert body["assets"] == web.ASSET_VERSION
+        assert body["build"]  # "unknown" off-platform, the commit sha on Railway
+
     def test_the_manifest_describes_the_installed_app(self, client: TestClient) -> None:
         manifest = client.get("/site.webmanifest").json()
         assert manifest["short_name"]

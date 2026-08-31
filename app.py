@@ -68,6 +68,14 @@ def _asset_version() -> str:
 
 ASSET_VERSION = _asset_version()
 
+# Railway stamps the deployed commit into the environment. Surfacing it makes
+# "is the running service actually built from the current code?" a question with
+# a one-request answer -- which is not obvious otherwise, and was the whole
+# difficulty behind a favicon that was correct in the repo and absent in the tab.
+BUILD_SHA = (
+    os.environ.get("RAILWAY_GIT_COMMIT_SHA") or os.environ.get("SOURCE_COMMIT") or "unknown"
+)[:8]
+
 app = FastAPI(title="pitchdeck-cfo", docs_url=None, redoc_url=None)
 security = HTTPBasic(auto_error=False)
 
@@ -286,6 +294,8 @@ async def healthz() -> dict[str, Any]:
     return {
         "status": "ok",
         "version": MODEL_VERSION,
+        "build": BUILD_SHA,
+        "assets": ASSET_VERSION,
         "credential": load_settings().has_credential,
         "protected": bool(APP_PASSWORD),
     }
