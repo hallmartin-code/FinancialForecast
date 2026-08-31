@@ -1,203 +1,552 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>pitchdeck-cfo</title>
+<meta charset="UTF-8">
+<title>TEN Capital Network — Deck to Financial Model</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-  :root {
-    --ink: #111; --muted: #666; --faint: #ddd; --bg: #fafafa; --card: #fff;
-    --accent: #0072B2; --warn: #B03A00; --ok: #009E73;
+  :root{
+    --navy-950: #0B1526;
+    --navy-900: #101E33;
+    --navy-800: #16283F;
+    --navy-700: #1E354F;
+    --navy-600: #2A4568;
+    --coral: #EE5A4E;
+    --coral-soft: #F0776C;
+    --amber: #F3A22A;
+    --teal: #35BEBB;
+    --ink-100: #F3F6FA;
+    --ink-300: #C4D0E0;
+    --ink-500: #7E90A8;
+    --ink-600: #5C6E86;
   }
-  @media (prefers-color-scheme: dark) {
-    :root { --ink:#eee; --muted:#999; --faint:#333; --bg:#141414; --card:#1c1c1c; }
+
+  *{ box-sizing: border-box; }
+
+  html, body{
+    margin:0; padding:0;
+    background: var(--navy-950);
+    color: var(--ink-100);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    min-height: 100vh;
   }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; background: var(--bg); color: var(--ink);
-    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+  body{
+    display:flex;
+    justify-content:center;
+    padding: 48px 20px 72px;
+    position:relative;
+    overflow-x:hidden;
   }
-  main { max-width: 760px; margin: 0 auto; padding: 40px 20px 80px; }
-  h1 { font-size: 24px; margin: 0 0 4px; letter-spacing: -0.01em; }
-  .sub { color: var(--muted); font-size: 14px; margin: 0 0 24px; }
-  .card {
-    background: var(--card); border: 1px solid var(--faint); border-radius: 10px;
-    padding: 20px; margin-bottom: 16px;
+
+  /* Ambient tri-colour glow, echoing the logo's three figures. */
+  body::before{
+    content:"";
+    position:fixed; inset:0;
+    background:
+      radial-gradient(480px 380px at 14% 8%, rgba(238,90,78,0.16), transparent 60%),
+      radial-gradient(480px 380px at 86% 6%, rgba(243,162,42,0.13), transparent 60%),
+      radial-gradient(560px 420px at 50% 100%, rgba(53,190,187,0.14), transparent 60%);
+    pointer-events:none; z-index:0;
   }
-  .disclosure { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
-  .disclosure.open { color: var(--warn); font-weight: 600; }
-  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
-  input[type=file] {
-    width: 100%; padding: 22px; border: 1.5px dashed var(--faint); border-radius: 8px;
-    background: transparent; color: var(--ink); cursor: pointer;
+
+  .stage{ position:relative; z-index:1; width:100%; max-width: 720px; }
+
+  /* ---------- brand ---------- */
+  .brand{ display:flex; align-items:center; gap:12px; margin-bottom:28px; padding-left:4px; }
+  .brand-mark{ width:34px; height:34px; flex-shrink:0; }
+  .brand-word{
+    font-family:'Sora', sans-serif; font-weight:800; font-size:15px;
+    letter-spacing:0.04em; line-height:1.15; text-transform:uppercase;
   }
-  .row { display: flex; gap: 20px; align-items: end; margin-top: 16px; flex-wrap: wrap; }
-  .row > div { flex: 1 1 140px; }
-  select, button {
-    font: inherit; padding: 10px 14px; border-radius: 8px;
-    border: 1px solid var(--faint); background: var(--card); color: var(--ink);
+  .brand-word span{
+    display:block; font-weight:600; font-size:10px; letter-spacing:0.22em;
+    color: var(--ink-500); margin-top:2px;
   }
-  select { width: 100%; }
-  button {
-    background: var(--accent); color: #fff; border-color: var(--accent);
-    font-weight: 600; cursor: pointer; padding: 11px 22px;
+
+  /* ---------- card ---------- */
+  .card{
+    background: linear-gradient(180deg, var(--navy-900) 0%, var(--navy-800) 100%);
+    border: 1px solid var(--navy-700);
+    border-radius: 20px;
+    padding: 44px 44px 36px;
+    box-shadow: 0 30px 60px -20px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.03);
+    position:relative; overflow:hidden;
+    margin-bottom: 20px;
   }
-  button[disabled] { opacity: .5; cursor: default; }
-  .check { display: flex; align-items: center; gap: 8px; font-size: 14px; }
-  .check input { width: 16px; height: 16px; }
-  .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
-  #panel { display: none; }
-  .status { display: flex; align-items: center; gap: 10px; font-size: 14px; }
-  .spinner {
-    width: 14px; height: 14px; border: 2px solid var(--faint);
-    border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite;
+  .card::after{
+    content:""; position:absolute; top:-2px; left:44px; right:44px; height:2px;
+    background: linear-gradient(90deg, var(--coral), var(--amber), var(--teal));
+    border-radius:2px;
   }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 14px; }
-  th, td { text-align: right; padding: 5px 4px; border-bottom: 1px solid var(--faint); }
-  th:first-child, td:first-child { text-align: left; }
-  th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; }
-  .neg { color: var(--warn); }
-  .coverage { font-size: 13px; margin-top: 14px; padding: 10px 12px; border-radius: 8px;
-              background: var(--bg); border: 1px solid var(--faint); }
-  .downloads { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
-  .downloads a {
-    text-decoration: none; padding: 11px 18px; border-radius: 8px; font-weight: 600;
-    font-size: 14px; background: var(--accent); color: #fff;
+
+  .eyebrow{
+    display:flex; align-items:center; gap:8px;
+    font-family:'JetBrains Mono', monospace; font-size:11px;
+    letter-spacing:0.14em; text-transform:uppercase; color: var(--teal);
+    margin-bottom:14px;
   }
-  .downloads a.alt { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
-  .error { color: var(--warn); font-size: 14px; }
-  .error .remedy { color: var(--muted); font-weight: normal; margin-top: 6px; }
-  footer { color: var(--muted); font-size: 12px; margin-top: 28px; line-height: 1.7; }
-  dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 13px; margin: 14px 0 0; }
-  dt { color: var(--muted); }
+  .eyebrow::before{
+    content:""; width:6px; height:6px; border-radius:50%;
+    background: var(--teal); box-shadow: 0 0 0 3px rgba(53,190,187,0.18);
+  }
+
+  h1{
+    font-family:'Sora', sans-serif; font-size:28px; font-weight:700;
+    line-height:1.25; margin:0 0 12px; letter-spacing:-0.01em;
+  }
+  h1 .arrow{ color: var(--ink-500); font-weight:400; margin:0 4px; }
+  h1 .to{
+    background: linear-gradient(90deg, var(--coral-soft), var(--amber));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+
+  .lede{ color: var(--ink-300); font-size:15px; line-height:1.6; margin:0 0 30px; max-width:52ch; }
+
+  /* ---------- dropzone ---------- */
+  .dropzone{
+    display:block;
+    border:1.5px dashed var(--navy-700); border-radius:14px;
+    padding:34px 24px; text-align:center; cursor:pointer;
+    background: rgba(255,255,255,0.015);
+    transition: border-color .18s ease, background .18s ease, transform .18s ease;
+  }
+  .dropzone:hover, .dropzone.hot{ border-color: var(--teal); background: rgba(53,190,187,0.06); }
+  .dropzone:active{ transform: scale(0.997); }
+  .dropzone.filled{ border-style: solid; border-color: var(--teal); background: rgba(53,190,187,0.05); }
+
+  .dropzone-icon{
+    width:38px; height:38px; margin:0 auto 14px; border-radius:10px;
+    background: linear-gradient(135deg, rgba(238,90,78,0.16), rgba(243,162,42,0.16));
+    border:1px solid var(--navy-700);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .dropzone-icon svg{ width:18px; height:18px; }
+  .dropzone-title{ font-size:15px; font-weight:600; margin-bottom:6px; }
+  .dropzone-sub{
+    font-family:'JetBrains Mono', monospace; font-size:11.5px; color: var(--ink-500);
+  }
+  .dropzone-sub b{ color: var(--ink-300); font-weight:500; }
+  .file-input{ display:none; }
+
+  /* ---------- options ---------- */
+  .options{ display:flex; gap:14px; margin-top:18px; flex-wrap:wrap; align-items:flex-end; }
+  .field{ flex:1 1 150px; }
+  .field label{
+    display:block; font-family:'JetBrains Mono', monospace; font-size:10.5px;
+    letter-spacing:0.12em; text-transform:uppercase; color: var(--ink-500); margin-bottom:7px;
+  }
+  select{
+    width:100%; padding:11px 12px; border-radius:10px;
+    border:1px solid var(--navy-700); background: var(--navy-950);
+    color: var(--ink-100); font:inherit; font-size:14px; cursor:pointer;
+  }
+  select:focus-visible, .switch:focus-within{ outline:2px solid var(--teal); outline-offset:2px; }
+  .switch{
+    display:flex; align-items:center; gap:9px; padding:11px 12px;
+    border:1px solid var(--navy-700); border-radius:10px; background: var(--navy-950);
+    cursor:pointer; font-size:14px;
+  }
+  .switch input{ width:15px; height:15px; accent-color: var(--teal); cursor:pointer; }
+  .hint{ font-size:11.5px; color: var(--ink-600); margin-top:7px; line-height:1.5; }
+
+  /* ---------- CTA ---------- */
+  .cta{
+    width:100%; margin-top:22px; padding:16px 20px; border:none; border-radius:12px;
+    background: linear-gradient(90deg, var(--coral) 0%, var(--coral-soft) 45%, var(--amber) 100%);
+    color:#17130E; font-family:'Sora', sans-serif; font-weight:700; font-size:15px;
+    cursor:pointer; transition: filter .15s ease, transform .15s ease;
+    box-shadow: 0 10px 24px -10px rgba(238,90,78,0.45);
+  }
+  .cta:hover:not(:disabled){ filter: brightness(1.06); transform: translateY(-1px); }
+  .cta:active:not(:disabled){ transform: translateY(0); }
+  .cta:disabled{ opacity:.45; cursor:default; box-shadow:none; filter:grayscale(.3); }
+
+  /* ---------- progress ---------- */
+  .stages{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:11px; }
+  .stages li{
+    display:flex; align-items:center; gap:11px; font-size:14px; color: var(--ink-600);
+    transition: color .2s ease;
+  }
+  .stages li .dot{
+    width:9px; height:9px; border-radius:50%; background: var(--navy-600); flex-shrink:0;
+    transition: background .2s ease, box-shadow .2s ease;
+  }
+  .stages li.active{ color: var(--ink-100); }
+  .stages li.active .dot{ background: var(--teal); box-shadow:0 0 0 4px rgba(53,190,187,0.16); }
+  .stages li.done{ color: var(--ink-300); }
+  .stages li.done .dot{ background: var(--teal); }
+
+  .spinner{
+    width:15px; height:15px; border:2px solid var(--navy-700);
+    border-top-color: var(--teal); border-radius:50%;
+    animation: spin .8s linear infinite; flex-shrink:0;
+  }
+  @keyframes spin{ to{ transform: rotate(360deg); } }
+
+  /* ---------- results ---------- */
+  .result-head{ display:flex; align-items:baseline; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+  h2{ font-family:'Sora', sans-serif; font-size:21px; font-weight:700; margin:0 0 4px; }
+  .result-sub{ font-family:'JetBrains Mono', monospace; font-size:11px; color: var(--ink-500);
+               letter-spacing:0.08em; text-transform:uppercase; }
+
+  table{ width:100%; border-collapse:collapse; margin-top:22px; font-size:13.5px; }
+  th, td{ text-align:right; padding:8px 6px; border-bottom:1px solid var(--navy-700); }
+  th:first-child, td:first-child{ text-align:left; }
+  thead th{
+    font-family:'JetBrains Mono', monospace; font-size:10.5px; letter-spacing:0.1em;
+    text-transform:uppercase; color: var(--ink-500); font-weight:500;
+  }
+  td{ font-variant-numeric: tabular-nums; color: var(--ink-300); }
+  tbody tr.key td{ color: var(--ink-100); font-weight:600; }
+  td.neg{ color: var(--coral-soft); }
+
+  /* coverage — the product's whole argument, so it gets real estate */
+  .coverage{ margin-top:26px; padding:18px 20px; border-radius:14px;
+             background: rgba(255,255,255,0.02); border:1px solid var(--navy-700); }
+  .coverage-top{ display:flex; align-items:baseline; justify-content:space-between; gap:12px; }
+  .coverage-pct{ font-family:'Sora', sans-serif; font-size:26px; font-weight:700; line-height:1; }
+  .coverage-label{ font-family:'JetBrains Mono', monospace; font-size:10.5px;
+                   letter-spacing:0.11em; text-transform:uppercase; color: var(--ink-500); }
+  .bar{ height:6px; border-radius:3px; background: var(--navy-700); margin:13px 0 11px; overflow:hidden; }
+  .bar span{ display:block; height:100%; border-radius:3px;
+             background: linear-gradient(90deg, var(--teal), var(--amber)); transition: width .5s ease; }
+  .coverage-note{ font-size:12.5px; color: var(--ink-500); line-height:1.6; }
+
+  .callout{
+    margin-top:20px; padding:16px 18px; border-radius:12px;
+    border:1px solid rgba(238,90,78,0.35); background: rgba(238,90,78,0.08);
+    font-size:13.5px; line-height:1.6;
+  }
+  .callout strong{ color: var(--coral-soft); display:block; margin-bottom:4px;
+                   font-family:'Sora', sans-serif; font-size:12px; letter-spacing:0.06em;
+                   text-transform:uppercase; }
+
+  .observations{ margin-top:22px; }
+  .observations h3{
+    font-family:'JetBrains Mono', monospace; font-size:10.5px; letter-spacing:0.11em;
+    text-transform:uppercase; color: var(--ink-500); font-weight:500; margin:0 0 11px;
+  }
+  .observations ol{ margin:0; padding-left:20px; }
+  .observations li{ font-size:13.5px; line-height:1.65; color: var(--ink-300); margin-bottom:9px; }
+
+  .facts{ display:grid; grid-template-columns:auto 1fr; gap:5px 16px; margin-top:22px; font-size:13px; }
+  .facts dt{ color: var(--ink-500); }
+  .facts dd{ margin:0; color: var(--ink-300); }
+
+  .downloads{ display:flex; gap:11px; margin-top:26px; flex-wrap:wrap; }
+  .btn{
+    text-decoration:none; padding:13px 20px; border-radius:11px; font-weight:600; font-size:14px;
+    font-family:'Sora', sans-serif; transition: filter .15s ease, transform .15s ease;
+    display:inline-flex; align-items:center; gap:8px;
+  }
+  .btn.primary{
+    background: linear-gradient(90deg, var(--coral) 0%, var(--amber) 100%); color:#17130E;
+    box-shadow: 0 10px 24px -12px rgba(238,90,78,0.45);
+  }
+  .btn.ghost{ border:1px solid var(--navy-600); color: var(--ink-100); }
+  .btn:hover{ filter:brightness(1.07); transform: translateY(-1px); }
+
+  .error{ font-size:14px; line-height:1.6; }
+  .error strong{ color: var(--coral-soft); display:block; margin-bottom:6px; font-size:15px; }
+  .error .remedy{ color: var(--ink-500); }
+
+  .restart{
+    margin-top:20px; background:none; border:none; padding:0; cursor:pointer;
+    font:inherit; font-size:13px; color: var(--ink-500); text-decoration:underline;
+  }
+  .restart:hover{ color: var(--ink-300); }
+
+  /* ---------- disclosure & footer ---------- */
+  .disclosure{
+    margin-top:22px; padding-top:18px; border-top:1px solid var(--navy-700);
+    font-size:12px; line-height:1.65; color: var(--ink-500);
+  }
+  .disclosure.open{ color: var(--coral-soft); }
+  .disclosure code{
+    font-family:'JetBrains Mono', monospace; background: var(--navy-950);
+    border:1px solid var(--navy-700); color: var(--ink-300);
+    padding:2px 6px; border-radius:5px; font-size:11.5px;
+  }
+  footer{
+    text-align:center; margin-top:22px; font-family:'JetBrains Mono', monospace;
+    font-size:11px; letter-spacing:0.08em; color: var(--ink-600); text-transform:uppercase;
+  }
+  .hidden{ display:none !important; }
+
+  @media (max-width: 520px){
+    .card{ padding:32px 22px 26px; }
+    .card::after{ left:22px; right:22px; }
+    h1{ font-size:23px; }
+    th, td{ padding:7px 3px; font-size:12.5px; }
+  }
 </style>
 </head>
 <body>
-<main>
-  <h1>pitchdeck-cfo</h1>
-  <p class="sub">A deck in, an auditable financial model and a one-page summary out.</p>
-  <p class="disclosure" id="disclosure">{{DISCLOSURE}}</p>
+<div class="stage">
 
-  <form class="card" id="form">
-    <label for="deck">Investor deck — .pdf or .pptx, up to {{MAX_MB}} MB</label>
-    <input type="file" id="deck" name="deck" accept=".pdf,.pptx" required>
-    <div class="row">
-      <div>
-        <label for="years">Forecast horizon</label>
-        <select id="years" name="years">
-          <option value="3">3 years</option>
-          <option value="5" selected>5 years</option>
-          <option value="7">7 years</option>
-        </select>
-      </div>
-      <div>
-        <label class="check" for="strict">
-          <input type="checkbox" id="strict" name="strict">
-          Strict mode
-        </label>
-        <div class="hint">Refuse to build if the deck states too little.</div>
-      </div>
-      <div style="flex:0 0 auto">
-        <button type="submit" id="go">Build</button>
-      </div>
-    </div>
-  </form>
+  <div class="brand">
+    <svg class="brand-mark" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M50 6 C64 6 74 16 74 16" stroke="#F3A22A" stroke-width="11" stroke-linecap="round" fill="none"/>
+      <path d="M76 66 C76 82 63 92 63 92" stroke="#35BEBB" stroke-width="11" stroke-linecap="round" fill="none"/>
+      <path d="M24 66 C24 82 37 92 37 92" stroke="#EE5A4E" stroke-width="11" stroke-linecap="round" fill="none" transform="rotate(180 50 79)"/>
+      <circle cx="50" cy="20" r="11" fill="#F3A22A"/>
+      <circle cx="78" cy="68" r="11" fill="#35BEBB"/>
+      <circle cx="22" cy="68" r="11" fill="#EE5A4E"/>
+    </svg>
+    <div class="brand-word">Ten Capital<span>Network</span></div>
+  </div>
 
-  <div class="card" id="panel"></div>
+  <!-- upload -->
+  <div class="card" id="upload-card">
+    <div class="eyebrow">Deck Analyzer</div>
+    <h1>Pitch Deck<span class="arrow">&rarr;</span><span class="to">Financial Model</span></h1>
+    <p class="lede">
+      Upload an investor deck and get an auditable five-year model and a one-page investor
+      summary. Every figure is traceable to the deck, an arithmetic derivation, or a
+      labelled benchmark.
+    </p>
 
-  <footer>
-    Every number in the output is traceable to the deck, an arithmetic derivation, or a
-    labelled benchmark. Benchmark-supplied values are marked so you can see which parts of
-    the model the company did not give you.<br>
-    Uploaded decks and generated files are deleted after {{TTL}} minutes.<br>
-    pitchdeck-cfo {{VERSION}} · TEN Capital Network
-  </footer>
-</main>
+    <form id="form">
+      <label class="dropzone" id="dropzone" for="deck-upload">
+        <div class="dropzone-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#F3F6FA" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 3v4a1 1 0 0 0 1 1h4"/>
+            <path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2Z"/>
+          </svg>
+        </div>
+        <div class="dropzone-title" id="dz-title">Click or drop a deck here</div>
+        <div class="dropzone-sub" id="dz-sub"><b>.pdf</b> &middot; <b>.pptx</b> &nbsp;·&nbsp; up to {{MAX_MB}}&nbsp;MB</div>
+        <input class="file-input" type="file" id="deck-upload" name="deck" accept=".pdf,.pptx" required>
+      </label>
+
+      <div class="options">
+        <div class="field">
+          <label for="years">Horizon</label>
+          <select id="years" name="years">
+            <option value="3">3 years</option>
+            <option value="5" selected>5 years</option>
+            <option value="7">7 years</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="strict">Sourcing</label>
+          <div class="switch">
+            <input type="checkbox" id="strict" name="strict">
+            <span>Strict mode</span>
+          </div>
+        </div>
+      </div>
+      <div class="hint">
+        Strict mode refuses to build when the deck states too little, rather than
+        returning a model that is mostly benchmark.
+      </div>
+
+      <button class="cta" type="submit" id="go" disabled>Build the model</button>
+    </form>
+
+    <div class="disclosure" id="disclosure">{{DISCLOSURE}}</div>
+  </div>
+
+  <!-- progress -->
+  <div class="card hidden" id="progress-card">
+    <div class="eyebrow">Working</div>
+    <h2 id="progress-title">Reading the deck</h2>
+    <p class="lede" style="margin-bottom:24px">
+      Two extraction passes, then the model and both documents. Usually under a minute.
+    </p>
+    <ul class="stages" id="stages"></ul>
+  </div>
+
+  <!-- results -->
+  <div class="card hidden" id="result-card"></div>
+
+  <footer>Powered by TEN Capital Network · pitchdeck-cfo {{VERSION}}</footer>
+</div>
 
 <script>
-const form = document.getElementById("form");
-const panel = document.getElementById("panel");
-const go = document.getElementById("go");
-const disclosure = document.getElementById("disclosure");
-if (disclosure.textContent.trim().startsWith("⚠")) disclosure.classList.add("open");
+const STAGES = [
+  ["reading deck",        "Reading the deck"],
+  ["profile",             "Extracting the company profile"],
+  ["financials",          "Extracting the financial facts"],
+  ["resolving",           "Resolving assumptions"],
+  ["building",            "Building the model"],
+  ["workbook",            "Writing the workbook"],
+  ["one-pager",           "Writing the one-pager"],
+];
+
+const $ = id => document.getElementById(id);
+const form = $("form"), go = $("go"), input = $("deck-upload"), dz = $("dropzone");
+const uploadCard = $("upload-card"), progressCard = $("progress-card"), resultCard = $("result-card");
+
+if ($("disclosure").textContent.trim().startsWith("⚠")) $("disclosure").classList.add("open");
+
+$("stages").innerHTML = STAGES.map(
+  ([, label]) => `<li><span class="dot"></span><span>${label}</span></li>`
+).join("");
 
 const money = n => (n < 0 ? "(" : "") + Math.abs(n).toLocaleString(undefined,
-  {maximumFractionDigits: 0}) + (n < 0 ? ")" : "");
+  { maximumFractionDigits: 0 }) + (n < 0 ? ")" : "");
+const compact = n => {
+  const m = Math.abs(n), s = n < 0 ? "-" : "";
+  if (m >= 1e6) return `${s}$${(m / 1e6).toFixed(1)}M`;
+  if (m >= 1e3) return `${s}$${Math.round(m / 1e3).toLocaleString()}K`;
+  return `${s}$${Math.round(m)}`;
+};
+const esc = s => String(s).replace(/[&<>"']/g, c =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
-function show(html) { panel.style.display = "block"; panel.innerHTML = html; }
+/* ---------- file selection ---------- */
+function chose(file) {
+  if (!file) return;
+  const mb = (file.size / 1e6).toFixed(1);
+  $("dz-title").textContent = file.name;
+  $("dz-sub").innerHTML = `<b>${mb} MB</b> &nbsp;·&nbsp; ready to build`;
+  dz.classList.add("filled");
+  go.disabled = false;
+}
+input.addEventListener("change", () => chose(input.files[0]));
 
-form.addEventListener("submit", async event => {
-  event.preventDefault();
-  go.disabled = true;
-  show('<div class="status"><div class="spinner"></div><span>uploading…</span></div>');
+["dragenter", "dragover"].forEach(e =>
+  dz.addEventListener(e, ev => { ev.preventDefault(); dz.classList.add("hot"); }));
+["dragleave", "drop"].forEach(e =>
+  dz.addEventListener(e, ev => { ev.preventDefault(); dz.classList.remove("hot"); }));
+dz.addEventListener("drop", ev => {
+  const file = ev.dataTransfer.files[0];
+  if (file) { input.files = ev.dataTransfer.files; chose(file); }
+});
 
-  const body = new FormData(form);
+/* ---------- submit ---------- */
+form.addEventListener("submit", async ev => {
+  ev.preventDefault();
+  uploadCard.classList.add("hidden");
+  progressCard.classList.remove("hidden");
+  resultCard.classList.add("hidden");
+  mark(0);
+
   let started;
   try {
-    const response = await fetch("/build", { method: "POST", body });
+    const response = await fetch("/build", { method: "POST", body: new FormData(form) });
     started = await response.json();
-    if (!response.ok) throw new Error(started.error || "upload failed");
+    if (!response.ok) throw new Error(started.error || "The upload was refused.");
   } catch (err) {
-    show('<div class="error">' + err.message + "</div>");
-    go.disabled = false;
-    return;
+    return fail(err.message, "");
   }
   poll(started.id);
 });
+
+function mark(index) {
+  [...$("stages").children].forEach((li, i) => {
+    li.className = i < index ? "done" : i === index ? "active" : "";
+    // The marker doubles as the spinner on the stage currently running.
+    li.querySelector(".dot, .spinner").className = i === index ? "spinner" : "dot";
+  });
+  $("progress-title").textContent = STAGES[Math.min(index, STAGES.length - 1)][1];
+}
+
+function stageIndex(message) {
+  const m = (message || "").toLowerCase();
+  for (let i = STAGES.length - 1; i >= 0; i--) if (m.includes(STAGES[i][0])) return i;
+  return 0;
+}
 
 async function poll(id) {
   let job;
   try {
     const response = await fetch("/status/" + id);
     job = await response.json();
-    if (!response.ok) throw new Error(job.error || "lost the job");
-  } catch (err) {
-    show('<div class="error">' + err.message + "</div>");
-    go.disabled = false;
-    return;
-  }
+    if (!response.ok) throw new Error(job.error || "Lost track of the job.");
+  } catch (err) { return fail(err.message, ""); }
 
   if (job.status === "queued" || job.status === "running") {
-    show('<div class="status"><div class="spinner"></div><span>' +
-         (job.message || job.status) + "…</span></div>");
-    setTimeout(() => poll(id), 1200);
-    return;
+    mark(stageIndex(job.message));
+    return setTimeout(() => poll(id), 1100);
   }
+  if (job.status === "failed") return fail(job.error, job.remedy);
+  succeed(job);
+}
 
-  go.disabled = false;
+/* ---------- outcomes ---------- */
+function shell(inner) {
+  progressCard.classList.add("hidden");
+  resultCard.classList.remove("hidden");
+  resultCard.innerHTML = inner +
+    `<button class="restart" type="button" onclick="location.reload()">Build another deck</button>`;
+}
 
-  if (job.status === "failed") {
-    show('<div class="error"><strong>' + job.error + "</strong>" +
-         (job.remedy ? '<div class="remedy">' + job.remedy + "</div>" : "") + "</div>");
-    return;
-  }
-
-  const years = job.summary[0].values.length;
-  const head = Array.from({length: years}, (_, i) => "<th>Y" + (i + 1) + "</th>").join("");
-  const rows = job.summary.map(r =>
-    "<tr><td>" + r.line + "</td>" +
-    r.values.map(v => '<td class="' + (v < 0 ? "neg" : "") + '">' + money(v) + "</td>").join("") +
-    "</tr>").join("");
-  const turns = Object.entries(job.break_even)
-    .map(([k, v]) => "<dt>" + k + "</dt><dd>" + v + "</dd>").join("");
-  const ratio = job.deck_ratio == null ? "" :
-    Math.round(job.deck_ratio * 100) + "% of core inputs came from the deck itself.";
-
-  show(
-    "<h2 style='margin:0 0 2px;font-size:18px'>" + (job.company || "Model") + "</h2>" +
-    "<div class='sub' style='margin:0'>$ figures, by fiscal year</div>" +
-    "<table><thead><tr><th></th>" + head + "</tr></thead><tbody>" + rows + "</tbody></table>" +
-    "<dl>" + turns + "</dl>" +
-    "<div class='coverage'>" + (job.coverage || "") + "<br>" + ratio +
-      (job.warnings ? "<br><span class='neg'>" + job.warnings +
-        " extracted quote(s) could not be confirmed against the deck.</span>" : "") +
-    "</div>" +
-    "<div class='downloads'>" +
-      "<a href='" + job.onepager_url + "'>Download one-pager (PDF)</a>" +
-      "<a class='alt' href='" + job.workbook_url + "'>Download model (XLSX)</a>" +
-    "</div>"
+function fail(error, remedy) {
+  shell(
+    `<div class="eyebrow" style="color:var(--coral-soft)">Could not build</div>
+     <div class="error"><strong>${esc(error)}</strong>` +
+    (remedy ? `<div class="remedy">${esc(remedy)}</div>` : "") + `</div>`
   );
+}
+
+function succeed(job) {
+  const years = job.summary[0].values.length;
+  const head = Array.from({ length: years }, (_, i) => `<th>Y${i + 1}</th>`).join("");
+  const rows = job.summary.map(r =>
+    `<tr class="${["Revenue", "EBITDA"].includes(r.line) ? "key" : ""}">
+       <td>${esc(r.line)}</td>` +
+    r.values.map(v => `<td class="${v < 0 ? "neg" : ""}">${money(v)}</td>`).join("") +
+    `</tr>`).join("");
+
+  const pct = job.deck_ratio == null ? null : Math.round(job.deck_ratio * 100);
+  const coverage = pct == null ? "" : `
+    <div class="coverage">
+      <div class="coverage-top">
+        <div class="coverage-pct">${pct}%</div>
+        <div class="coverage-label">from the deck itself</div>
+      </div>
+      <div class="bar"><span style="width:${pct}%"></span></div>
+      <div class="coverage-note">
+        ${esc(job.coverage || "")}
+        ${job.warnings ? `<br><span style="color:var(--coral-soft)">${job.warnings} extracted quote(s) could not be confirmed against the page cited.</span>` : ""}
+      </div>
+    </div>`;
+
+  const gap = !job.deck_gap ? "" : `
+    <div class="callout">
+      <strong>Deck vs model</strong>
+      The company's own peak revenue projection of ${compact(job.deck_gap.deck)} is
+      ${job.deck_gap.ratio}&times; this model's ${compact(job.deck_gap.model)}.
+      The model uses labelled benchmarks wherever the deck stated no driver — the gap is
+      the question to put to the founder.
+    </div>`;
+
+  const notes = !(job.observations || []).length ? "" : `
+    <div class="observations">
+      <h3>Key CFO observations</h3>
+      <ol>${job.observations.map(o => `<li>${esc(o)}</li>`).join("")}</ol>
+    </div>`;
+
+  const facts = Object.entries(job.break_even || {})
+    .map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
+
+  shell(`
+    <div class="eyebrow">Model built</div>
+    <div class="result-head">
+      <h2>${esc(job.company || "Financial model")}</h2>
+      <div class="result-sub">$ by fiscal year</div>
+    </div>
+    <table>
+      <thead><tr><th></th>${head}</tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    ${facts ? `<dl class="facts">${facts}</dl>` : ""}
+    ${coverage}${gap}${notes}
+    <div class="downloads">
+      <a class="btn primary" href="${job.onepager_url}">Download one-pager (PDF)</a>
+      <a class="btn ghost" href="${job.workbook_url}">Download model (XLSX)</a>
+    </div>
+    <div class="disclosure">
+      Uploaded decks and generated files are deleted after {{TTL}} minutes. Benchmark-supplied
+      values are marked in both documents, so you can see which parts of the model the
+      company did not give you.
+    </div>`);
 }
 </script>
 </body>

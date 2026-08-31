@@ -214,3 +214,107 @@ class TestRetention:
         client.post("/build", files=_deck())
         assert job_id in web.JOBS
         shutil.rmtree(web.JOBS[job_id].directory, ignore_errors=True)
+
+
+class TestPageContract:
+    """The page states what the service does. Wrong claims here are the failure mode.
+
+    The design this page was built from carried a line promising that a copy of every
+    generated document is emailed to a named address. That is true of a different
+    tool. This app emails nobody, and a page that said otherwise would be lying to
+    whoever uploads a confidential deck.
+    """
+
+    def test_no_placeholder_survives_into_the_response(self, client: TestClient) -> None:
+        page = client.get("/").text
+        for token in ("{{DISCLOSURE}}", "{{VERSION}}", "{{MAX_MB}}", "{{TTL}}"):
+            assert token not in page, f"{token} was not substituted"
+
+    def test_the_page_makes_no_claim_about_emailing_anyone(self, client: TestClient) -> None:
+        page = client.get("/").text.lower()
+        for claim in ("gmail.com", "emailed to", "we email", "sent to your inbox"):
+            assert claim not in page, f"the page claims {claim!r}, which this app does not do"
+
+    def test_only_the_supported_formats_are_offered(self, client: TestClient) -> None:
+        # Offering .docx would invite an upload the pipeline refuses.
+        page = client.get("/").text
+        assert 'accept=".pdf,.pptx"' in page
+        assert ".docx" not in page
+
+    def test_the_upload_limit_shown_matches_the_one_enforced(
+        self, client: TestClient, web: Any
+    ) -> None:
+        assert f"up to {web.MAX_UPLOAD_MB}" in client.get("/").text.replace("&nbsp;", " ")
+
+    def test_the_retention_window_shown_matches_the_sweep(
+        self, client: TestClient, web: Any
+    ) -> None:
+        assert f"deleted after {web.JOB_TTL_MINUTES} minutes" in client.get("/").text
+
+    def test_the_page_is_well_formed(self, client: TestClient) -> None:
+        from html.parser import HTMLParser
+
+        VOID = {"br", "hr", "img", "input", "link", "meta", "path", "circle", "source"}
+
+        class Checker(HTMLParser):
+            def __init__(self) -> None:
+                super().__init__()
+                self.stack: list[str] = []
+                self.problems: list[str] = []
+
+            def handle_starttag(self, tag: str, attrs: Any) -> None:
+                if tag not in VOID:
+                    self.stack.append(tag)
+
+            def handle_endtag(self, tag: str) -> None:
+                if tag in VOID:
+                    return
+                if not self.stack or self.stack[-1] != tag:
+                    self.problems.append(f"</{tag}> closes {self.stack[-1:] or ['nothing']}")
+                else:
+                    self.stack.pop()
+
+        checker = Checker()
+        checker.feed(client.get("/").text)
+        assert not checker.problems, checker.problems
+        assert not checker.stack, f"unclosed: {checker.stack}"
+
+
+class TestResultPayload:
+    """The browser renders whatever /status returns, so its shape is a contract."""
+
+    def test_observations_and_the_deck_gap_are_exposed(self, client: TestClient) -> None:
+        job = _finish(client, client.post("/build", files=_deck()).json()["id"])
+        assert "observations" in job
+        assert isinstance(job["observations"], list)
+        assert "deck_gap" in job
+
+    def test_a_large_deck_versus_model_gap_is_reported(
+        self, client: TestClient, web: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The single most useful thing on the page when it applies."""
+        from pitchdeck_cfo.pipeline import BuildResult
+
+        def with_claim(deck: Path, out_dir: Path, **kwargs: Any) -> Any:
+            base = mf.assumptions("saas")
+            model = build(
+                base.model_copy(update={"deck_revenue_projection": (("2030", 500_000_000.0),)})
+            )
+            out_dir.mkdir(parents=True, exist_ok=True)
+            onepager = out_dir / "a.pdf"
+            book = out_dir / "a.xlsx"
+            onepager.write_bytes(b"%PDF")
+            book.write_bytes(b"PK")
+            return BuildResult(
+                facts=None,  # type: ignore[arg-type]
+                assumptions=model.assumptions,
+                model=model,
+                onepager_path=onepager,
+                workbook_path=book,
+            )
+
+        monkeypatch.setattr(web.pipeline, "run", with_claim)
+        job = _finish(client, client.post("/build", files=_deck()).json()["id"])
+        assert job["deck_gap"] is not None
+        assert job["deck_gap"]["deck"] == 500_000_000
+        assert job["deck_gap"]["ratio"] > 1.6

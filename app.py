@@ -98,6 +98,8 @@ class Job:
     summary: list[dict[str, Any]] = field(default_factory=list)
     break_even: dict[str, str] = field(default_factory=dict)
     warnings: int = 0
+    observations: list[str] = field(default_factory=list)
+    deck_gap: dict[str, Any] | None = None
     error: str | None = None
     remedy: str | None = None
     onepager: Path | None = None
@@ -116,6 +118,8 @@ class Job:
             "summary": self.summary,
             "break_even": self.break_even,
             "warnings": self.warnings,
+            "observations": self.observations,
+            "deck_gap": self.deck_gap,
             "error": self.error,
             "remedy": self.remedy,
             "onepager_url": f"/download/{self.id}/onepager" if self.onepager else None,
@@ -179,6 +183,24 @@ async def _run_job(job: Job, deck: Path, out_dir: Path, years: int, strict: bool
             }
             for line in ("Revenue", "Gross Profit", "EBITDA", "Net Income")
         ] + [{"line": "Ending cash", "values": [round(v) for v in model.ending_cash]}]
+        # The analytical payload: the same observations the workbook's Summary
+        # carries, so the browser and the file say the same thing.
+        from pitchdeck_cfo.render.plan import observations
+
+        job.observations = list(observations(model))
+
+        # The single most useful thing on the page when it applies: the company's own
+        # forecast against this model's.
+        claim = model.deck_final_year_revenue
+        if claim and model.final_year_revenue > 0:
+            ratio = claim / model.final_year_revenue
+            if ratio > 1.6 or ratio < 0.6:
+                job.deck_gap = {
+                    "deck": round(claim),
+                    "model": round(model.final_year_revenue),
+                    "ratio": round(ratio, 1),
+                }
+
         job.onepager = result.onepager_path
         job.workbook = result.workbook_path
         job.status = "done"
