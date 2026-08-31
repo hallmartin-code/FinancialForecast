@@ -343,3 +343,74 @@ class TestResultPayload:
         assert job["deck_gap"] is not None
         assert job["deck_gap"]["deck"] == 500_000_000
         assert job["deck_gap"]["ratio"] > 1.6
+
+
+class TestBrandAssets:
+    """The favicon set. Small, but it has one real trap in it."""
+
+    @pytest.mark.parametrize(
+        ("path", "media_type"),
+        [
+            ("/favicon.ico", "image/x-icon"),
+            ("/static/favicon-32.png", "image/png"),
+            ("/static/favicon-16.png", "image/png"),
+            ("/static/apple-touch-icon.png", "image/png"),
+            ("/static/icon-192.png", "image/png"),
+            ("/static/icon-512.png", "image/png"),
+            ("/static/icon-maskable-512.png", "image/png"),
+        ],
+    )
+    def test_each_asset_serves_with_the_right_type(
+        self, client: TestClient, path: str, media_type: str
+    ) -> None:
+        response = client.get(path)
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith(media_type)
+        assert len(response.content) > 500
+
+    def test_the_head_references_every_size_a_browser_looks_for(self, client: TestClient) -> None:
+        page = client.get("/").text
+        for reference in (
+            'href="/favicon.ico"',
+            'href="/static/favicon-32.png"',
+            'href="/static/favicon-16.png"',
+            'rel="apple-touch-icon"',
+            'rel="manifest"',
+            'name="theme-color"',
+        ):
+            assert reference in page, f"the document head is missing {reference}"
+
+    def test_the_manifest_describes_the_installed_app(self, client: TestClient) -> None:
+        manifest = client.get("/site.webmanifest").json()
+        assert manifest["short_name"]
+        assert manifest["theme_color"] == "#0B1526"
+        assert {icon["sizes"] for icon in manifest["icons"]} == {"192x192", "512x512"}
+        assert any(icon.get("purpose") == "maskable" for icon in manifest["icons"])
+
+    def test_assets_are_reachable_without_credentials(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The trap: a browser requests /favicon.ico before it has credentials.
+
+        Behind the auth gate it would 401 and the tab would show a blank page icon,
+        which looks like a broken deployment rather than a protected one.
+        """
+        monkeypatch.setenv("APP_PASSWORD", "hunter2")
+        module = importlib.import_module("app")
+        importlib.reload(module)
+        guarded = TestClient(module.app)
+
+        assert guarded.get("/").status_code == 401
+        for path in ("/favicon.ico", "/site.webmanifest", "/static/favicon-32.png"):
+            assert guarded.get(path).status_code == 200, f"{path} is behind the auth gate"
+
+    def test_the_icon_is_square_and_multi_resolution(self) -> None:
+        from app import STATIC_DIR
+        from PIL import Image
+
+        with Image.open(STATIC_DIR / "favicon.ico") as icon:
+            # A single large PNG renamed .ico makes browsers downscale it badly.
+            assert len(icon.info.get("sizes", [])) >= 4
+        for name in ("favicon-32.png", "apple-touch-icon.png", "icon-512.png"):
+            with Image.open(STATIC_DIR / name) as image:
+                assert image.width == image.height, f"{name} is not square"

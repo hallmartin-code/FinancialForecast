@@ -27,6 +27,7 @@ from dotenv import load_dotenv
 from fastapi import BackgroundTasks, Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi.staticfiles import StaticFiles
 
 load_dotenv()
 
@@ -46,9 +47,15 @@ APP_USERNAME = os.environ.get("APP_USERNAME", "ten")
 APP_PASSWORD = os.environ.get("APP_PASSWORD")
 
 WEB_DIR = Path(__file__).parent / "web"
+STATIC_DIR = WEB_DIR / "static"
 
 app = FastAPI(title="pitchdeck-cfo", docs_url=None, redoc_url=None)
 security = HTTPBasic(auto_error=False)
+
+# Brand assets. Deliberately outside the auth gate: a browser fetches /favicon.ico
+# before it has credentials, and a logo is not a secret. Long-lived cache headers
+# because these change about as often as the company rebrands.
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 # One build at a time by default. Each spends real money and holds a deck in memory,
 # so unbounded concurrency is a way to be surprised twice.
@@ -216,6 +223,42 @@ async def _run_job(job: Job, deck: Path, out_dir: Path, years: int, strict: bool
 # --------------------------------------------------------------------------- #
 # routes
 # --------------------------------------------------------------------------- #
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon() -> FileResponse:
+    """Browsers request this path at the root whatever the HTML says."""
+    return FileResponse(
+        STATIC_DIR / "favicon.ico",
+        media_type="image/x-icon",
+        headers={"Cache-Control": "public, max-age=604800"},
+    )
+
+
+@app.get("/site.webmanifest", include_in_schema=False)
+async def manifest() -> JSONResponse:
+    """Names and colours the app when someone installs or pins it."""
+    return JSONResponse(
+        {
+            "name": "TEN Capital — Deck to Financial Model",
+            "short_name": "Deck Analyzer",
+            "icons": [
+                {"src": "/static/icon-192.png", "sizes": "192x192", "type": "image/png"},
+                {"src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png"},
+                {
+                    "src": "/static/icon-maskable-512.png",
+                    "sizes": "512x512",
+                    "type": "image/png",
+                    "purpose": "maskable",
+                },
+            ],
+            "theme_color": "#0B1526",
+            "background_color": "#0B1526",
+            "display": "standalone",
+            "start_url": "/",
+        },
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
 
 
 @app.get("/healthz")
