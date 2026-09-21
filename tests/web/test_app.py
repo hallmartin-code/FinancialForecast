@@ -359,6 +359,7 @@ class TestBrandAssets:
             ("/static/icon-192.png", "image/png"),
             ("/static/icon-512.png", "image/png"),
             ("/static/icon-maskable-512.png", "image/png"),
+            ("/static/brand-mark.png", "image/png"),
         ],
     )
     def test_each_asset_serves_with_the_right_type(
@@ -380,6 +381,16 @@ class TestBrandAssets:
             'name="theme-color"',
         ):
             assert reference in page, f"the document head is missing {reference}"
+
+    def test_the_header_shows_the_real_mark(self, client: TestClient) -> None:
+        """The header once carried a hand-drawn SVG approximation that looked nothing
+        like the logo. It must reference the shipped asset, and that asset must load."""
+        page = client.get("/").text
+        brand = page[page.index('class="brand"') : page.index('class="brand-word"')]
+        assert "<svg" not in brand
+        src = re.search(r'src="(/static/brand-mark\.png)\?v=[a-f0-9]{8}"', brand)
+        assert src is not None
+        assert client.get(src.group(1)).status_code == 200
 
     def test_every_icon_url_is_versioned(self, client: TestClient) -> None:
         """Browsers cache favicons -- and the absence of one -- past any normal reload.
